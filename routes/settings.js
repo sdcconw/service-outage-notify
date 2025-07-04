@@ -3,82 +3,90 @@ const router = express.Router();
 const db = require('../models/db');
 const auth = require('../middleware/auth');
 
-// 設定管理画面 表示
-router.get('/', auth, (req, res) => {
-  const categories = db.prepare("SELECT * FROM categories").all();
-  const statuses = db.prepare("SELECT * FROM statuses").all();
-  const tags = db.prepare("SELECT * FROM tags").all();
+// 共通のDB操作関数
+const getAll = (table) => db.prepare(`SELECT * FROM ${table}`).all();
 
+const insert = (table, name) => {
+  if (!name) return;
+  db.prepare(`INSERT INTO ${table} (name) VALUES (?)`).run(name);
+};
+
+const update = (table, id, name) => {
+  db.prepare(`UPDATE ${table} SET name = ? WHERE id = ?`).run(name, id);
+};
+
+const isUsed = (table, column, id) => {
+  const row = db.prepare(`SELECT COUNT(*) AS cnt FROM ${table} WHERE ${column} = ?`).get(id);
+  return row && row.cnt > 0;
+};
+
+const remove = (table, id) => {
+  db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+};
+
+// 管理画面表示
+router.get('/', auth, (req, res) => {
   res.render('admin_settings', {
-    categories,
-    statuses,
-    tags
+    categories: getAll('categories'),
+    statuses: getAll('statuses'),
+    tags: getAll('tags'),
   });
 });
 
-// ----- カテゴリ -----
+// カテゴリ
 router.post('/add/category', auth, (req, res) => {
-  const { name } = req.body;
-  if (name) db.prepare("INSERT INTO categories (name) VALUES (?)").run(name);
+  insert('categories', req.body.name);
   res.redirect('/admin/settings');
 });
 
 router.post('/edit/category/:id', auth, (req, res) => {
-  const { name } = req.body;
-  db.prepare("UPDATE categories SET name = ? WHERE id = ?").run(name, req.params.id);
+  update('categories', req.params.id, req.body.name);
   res.redirect('/admin/settings');
 });
 
 router.post('/delete/category/:id', auth, (req, res) => {
-  const usage = db.prepare("SELECT COUNT(*) AS cnt FROM incidents WHERE category_id = ?").get(req.params.id).cnt;
-  if (usage > 0) {
-    return res.status(400).send("このカテゴリは使用中のため削除できません。");
+  if (isUsed('incidents', 'category_id', req.params.id)) {
+    return res.status(400).send('このカテゴリは使用中のため削除できません。');
   }
-  db.prepare("DELETE FROM categories WHERE id = ?").run(req.params.id);
+  remove('categories', req.params.id);
   res.redirect('/admin/settings');
 });
 
-// ----- ステータス -----
+// ステータス
 router.post('/add/status', auth, (req, res) => {
-  const { name } = req.body;
-  if (name) db.prepare("INSERT INTO statuses (name) VALUES (?)").run(name);
+  insert('statuses', req.body.name);
   res.redirect('/admin/settings');
 });
 
 router.post('/edit/status/:id', auth, (req, res) => {
-  const { name } = req.body;
-  db.prepare("UPDATE statuses SET name = ? WHERE id = ?").run(name, req.params.id);
+  update('statuses', req.params.id, req.body.name);
   res.redirect('/admin/settings');
 });
 
 router.post('/delete/status/:id', auth, (req, res) => {
-  const usage = db.prepare("SELECT COUNT(*) AS cnt FROM incidents WHERE status_id = ?").get(req.params.id).cnt;
-  if (usage > 0) {
-    return res.status(400).send("このステータスは使用中のため削除できません。");
+  if (isUsed('incidents', 'status_id', req.params.id)) {
+    return res.status(400).send('このステータスは使用中のため削除できません。');
   }
-  db.prepare("DELETE FROM statuses WHERE id = ?").run(req.params.id);
+  remove('statuses', req.params.id);
   res.redirect('/admin/settings');
 });
 
-// ----- タグ -----
+// タグ
 router.post('/add/tag', auth, (req, res) => {
-  const { name } = req.body;
-  if (name) db.prepare("INSERT INTO tags (name) VALUES (?)").run(name);
+  insert('tags', req.body.name);
   res.redirect('/admin/settings');
 });
 
 router.post('/edit/tag/:id', auth, (req, res) => {
-  const { name } = req.body;
-  db.prepare("UPDATE tags SET name = ? WHERE id = ?").run(name, req.params.id);
+  update('tags', req.params.id, req.body.name);
   res.redirect('/admin/settings');
 });
 
 router.post('/delete/tag/:id', auth, (req, res) => {
-  const usage = db.prepare("SELECT COUNT(*) AS cnt FROM incident_tags WHERE tag_id = ?").get(req.params.id).cnt;
-  if (usage > 0) {
-    return res.status(400).send("このタグは使用中のため削除できません。");
+  if (isUsed('incident_tags', 'tag_id', req.params.id)) {
+    return res.status(400).send('このタグは使用中のため削除できません。');
   }
-  db.prepare("DELETE FROM tags WHERE id = ?").run(req.params.id);
+  remove('tags', req.params.id);
   res.redirect('/admin/settings');
 });
 

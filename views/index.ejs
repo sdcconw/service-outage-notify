@@ -1,44 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>故障情報提供ページ（軽量版）</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     th.sortable { cursor: pointer; user-select: none; }
     th span { margin-left: 6px; color: #666; }
+    h1 { font-size: 3rem; } 
+    td, th { white-space: nowrap; }
   </style>
 </head>
 <body>
-<div class="container my-4">
+<div class="container-fluid my-4">
   <h1>島根データセンター友の会 障害情報提供（軽量版）</h1>
-  <table class="table table-bordered table-hover" id="incidentTable">
-    <thead>
-      <tr>
-        <th class="sortable" onclick="sortTable(0, this)">管理番号 <span></span></th>
-        <th class="sortable" onclick="sortTable(1, this)">カテゴリ <span></span></th>
-        <th class="sortable" onclick="sortTable(2, this)">案件名 <span></span></th>
-        <th class="sortable" onclick="sortTable(3, this)">ステータス <span></span></th>
-        <th class="sortable" onclick="sortTable(4, this)">タグ <span></span></th>
-        <th>日時</th>
-        <th>提供情報</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% incidents.forEach(incident => { %>
+
+  <!-- Responsive Table Wrapper -->
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover" id="incidentTable">
+      <thead>
         <tr>
-          <td><%= incident.code %></td>
-          <td><%= incident.category %></td>
-          <td><%= incident.title %></td>
-          <td>
-            <span class="badge bg-<%= incident.status_color %>"><%= incident.status %></span>
-          </td>
-          <td><%= incident.tags.join(", ") %></td>
-          <td><%= incident.start_at %> ~ <%= incident.end_at || "継続中" %></td>
-          <td><div><%- incident.info_html %></div></td>
+          <th class="sortable" onclick="sortTable(0, this)">管理番号 <span></span></th>
+          <th class="sortable" onclick="sortTable(1, this)">カテゴリ <span></span></th>
+          <th class="sortable" onclick="sortTable(2, this)">案件名 <span></span></th>
+          <th class="sortable" onclick="sortTable(3, this)">ステータス <span></span></th>
+          <th class="sortable" onclick="sortTable(4, this)">タグ <span></span></th>
+          <th>日時</th>
+          <th>提供情報</th>
         </tr>
-      <% }) %>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <% incidents.forEach(incident => { %>
+          <tr>
+            <td><%= incident.code %></td>
+            <td><%= incident.category %></td>
+            <td><%= incident.title %></td>
+            <td>
+              <span class="badge bg-<%= incident.status_color %>"><%= incident.status %></span>
+            </td>
+            <td>
+              <%- incident.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join(' ') %>
+            </td>
+            <td><%= incident.start_at %> ~ <%= incident.end_at || "継続中" %></td>
+            <td><div><%- incident.info_html %></div></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -47,7 +57,7 @@ let currentSortedTh = null;
 
 function sortTable(colIndex, th) {
   const table = document.getElementById("incidentTable");
-  const rows = Array.from(table.tBodies[0].rows);
+  const rows = [...table.tBodies[0].rows];
 
   rows.sort((a, b) => {
     const A = a.cells[colIndex].innerText.trim();
@@ -57,12 +67,11 @@ function sortTable(colIndex, th) {
 
   rows.forEach(row => table.tBodies[0].appendChild(row));
 
-  // 矢印表示
   if (currentSortedTh && currentSortedTh !== th) {
     currentSortedTh.querySelector("span").textContent = '';
   }
-  const arrow = sortDir ? "▲" : "▼";
-  th.querySelector("span").textContent = arrow;
+
+  th.querySelector("span").textContent = sortDir ? "▲" : "▼";
   currentSortedTh = th;
   sortDir = !sortDir;
 }

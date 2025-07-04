@@ -1,12 +1,18 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const app = express();
 const path = require('path');
-const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
+const db = require('./models/db');
 
-dotenv.config();
+// view設定
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// ミドルウェア設定
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -15,17 +21,10 @@ app.use(cookieParser());
 // ルーティング
 app.use('/', require('./routes/public'));
 app.use('/admin', require('./routes/admin'));
+app.use('/admin/settings', require('./routes/settings'));
 app.use('/api', require('./routes/api'));
 
-// サーバ起動
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
-
-const jwt = require('jsonwebtoken');
-const db = require('./models/db');
+// ログイン処理
 app.get('/login', (req, res) => res.render('login'));
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -41,9 +40,12 @@ app.post('/login', (req, res) => {
   }
 });
 
-
 // Swagger UI
 const { swaggerUi, specs } = require('./swagger');
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
-app.use('/admin/settings', require('./routes/settings'));
+// サーバ起動
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});

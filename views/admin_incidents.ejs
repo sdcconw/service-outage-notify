@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
+  <meta charset="UTF-8" />
   <title>障害管理</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body { padding-top: 70px; }
@@ -28,60 +29,66 @@
 <div class="container my-4">
   <h2>新規登録 / 編集</h2>
   <form id="incidentForm" method="POST" action="/admin/incidents/add">
-    <input type="hidden" name="id" id="incidentId">
+    <input type="hidden" name="id" id="incidentId" />
     <div id="editNotice" class="alert alert-warning d-none">
       編集中: <span id="editingCode"></span>
       <button type="button" class="btn btn-sm btn-secondary ms-3" onclick="cancelEdit()">キャンセル</button>
     </div>
 
     <div class="mb-3">
-      <label class="form-label">案件名</label>
-      <input type="text" name="title" class="form-control" required>
+      <label class="form-label" for="titleInput">案件名</label>
+      <input id="titleInput" type="text" name="title" class="form-control" required />
     </div>
     <div class="mb-3">
-      <label class="form-label">カテゴリ</label>
-      <select name="category_id" class="form-select">
+      <label class="form-label" for="categorySelect">カテゴリ</label>
+      <select id="categorySelect" name="category_id" class="form-select">
         <% categories.forEach(cat => { %>
           <option value="<%= cat.id %>"><%= cat.name %></option>
         <% }) %>
       </select>
     </div>
     <div class="mb-3">
-      <label class="form-label">ステータス</label>
-      <select name="status_id" class="form-select">
+      <label class="form-label" for="statusSelect">ステータス</label>
+      <select id="statusSelect" name="status_id" class="form-select">
         <% statuses.forEach(stat => { %>
           <option value="<%= stat.id %>"><%= stat.name %></option>
         <% }) %>
       </select>
     </div>
     <div class="mb-3">
-      <label class="form-label">提供情報（Markdown）</label>
-      <textarea name="info_md" class="form-control" rows="4" oninput="updatePreview(this.value)"></textarea>
+      <label class="form-label" for="infoTextarea">提供情報（Markdown）</label>
+      <textarea id="infoTextarea" name="info_md" class="form-control" rows="4" oninput="updatePreview(this.value)"></textarea>
     </div>
     <div class="mb-3">
-      <label class="form-label">開始日時</label>
-      <input type="datetime-local" name="start_at" class="form-control" required>
+      <label class="form-label" for="startAtInput">開始日時</label>
+      <input id="startAtInput" type="datetime-local" name="start_at" class="form-control" required />
     </div>
     <div class="mb-3">
-      <label class="form-label">終了日時（継続中の場合は空欄）</label>
-      <input type="datetime-local" name="end_at" class="form-control">
+      <label class="form-label" for="endAtInput">終了日時（継続中の場合は空欄）</label>
+      <input id="endAtInput" type="datetime-local" name="end_at" class="form-control" />
     </div>
     <div class="mb-3">
       <label class="form-label">プレビュー</label>
       <div id="preview" class="p-2 border bg-light"></div>
     </div>
     <div class="mb-3">
-      <label class="form-label">タグ</label>
-      <select name="tags" class="form-select" multiple>
+      <label class="form-label" for="tagsSelect">タグ</label>
+      <select id="tagsSelect" name="tags" class="form-select" multiple>
         <% tags.forEach(tag => { %>
           <option value="<%= tag.id %>"><%= tag.name %></option>
         <% }) %>
       </select>
     </div>
-    <button type="submit" class="btn btn-primary">保存</button>
+    <div class="d-flex align-items-center gap-3">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="discordNotify" name="discord_notify" value="1" />
+        <label class="form-check-label" for="discordNotify">Discordに送信</label>
+      </div>
+    </div>
   </form>
 
-  <hr>
+  <hr />
   <h2>障害一覧</h2>
   <table class="table table-bordered table-hover" id="incidentTable">
     <thead>
@@ -102,24 +109,16 @@
           <td><%= item.code %></td>
           <td><%= item.category %></td>
           <td><%= item.title %></td>
-          <td>
-            <span class="badge" style="background-color:<%= item.status_color %>;">
-              <%= item.status %>
-            </span>
-          </td>
+          <td><span class="badge" style="background-color:<%= item.status_color %>;"><%= item.status %></span></td>
           <td>
             <% item.tags.forEach(tag => { %>
               <span class="badge bg-secondary me-1"><%= tag %></span>
             <% }) %>
           </td>
+          <td><%= item.start_at %> ～ <%= item.end_at || '継続中' %></td>
+          <td><div><%= (item.info_md || '').slice(0, 300) %></div></td>
           <td>
-            <%= item.start_at %> ～ <%= item.end_at ? item.end_at : '継続中' %>
-          </td>
-          <td>
-            <div><%= (item.info_md || '').slice(0, 300) %></div>
-          </td>
-          <td>
-            <button 
+            <button
               class="btn btn-sm btn-outline-primary"
               onclick="editIncidentFromData(this)"
               data-incident-id="<%= item.id %>"
@@ -127,16 +126,15 @@
               data-incident-title="<%= item.title %>"
               data-incident-category="<%= item.category_id %>"
               data-incident-status="<%= item.status_id %>"
-              data-incident-info="<%= (item.info_md || '').replace(/"/g, '&quot;').replace(/\n/g, '\\n') %>"
+              data-incident-info="<%= (item.info_md || '').replace(/"/g, '&quot;') %>"
               data-incident-start="<%= item.start_at %>"
               data-incident-end="<%= item.end_at || '' %>"
-              data-incident-tags="<%= (item.tag_ids || []).join(',') %>">
+              data-incident-tags="<%= (item.tag_ids || []).join(',') %>"
+            >
               編集
             </button>
             <form method="POST" action="/admin/incidents/hide/<%= item.id %>" class="d-inline">
-              <button class="btn btn-sm btn-outline-warning">
-                <%= item.is_hidden ? '表示' : '非表示' %>
-              </button>
+              <button class="btn btn-sm btn-outline-warning"><%= item.is_hidden ? '表示' : '非表示' %></button>
             </form>
             <form method="POST" action="/admin/incidents/delete/<%= item.id %>" class="d-inline" onsubmit="return confirm('削除してもよろしいですか？');">
               <button class="btn btn-sm btn-outline-danger">削除</button>
@@ -149,16 +147,15 @@
 </div>
 
 <script>
-function updatePreview(md) {
+const updatePreview = md => {
   try {
     document.getElementById('preview').innerHTML = marked.parse(md);
-  } catch (error) {
-    console.error('Markdown parsing error:', error);
+  } catch {
     document.getElementById('preview').innerHTML = '<div class="text-danger">プレビューエラー</div>';
   }
-}
+};
 
-function editIncidentFromData(button) {
+const editIncidentFromData = button => {
   try {
     const incident = {
       id: button.dataset.incidentId,
@@ -173,53 +170,56 @@ function editIncidentFromData(button) {
     };
 
     document.getElementById('incidentId').value = incident.id;
-    document.querySelector('input[name=title]').value = incident.title;
-    document.querySelector('select[name=category_id]').value = String(incident.category_id);
-    document.querySelector('select[name=status_id]').value = String(incident.status_id);
-    document.querySelector('textarea[name=info_md]').value = incident.info_md || "";
-    document.querySelector('input[name=start_at]').value = incident.start_at ? incident.start_at.slice(0,16) : '';
-    document.querySelector('input[name=end_at]').value = incident.end_at ? incident.end_at.slice(0,16) : '';
-    
-    // タグ選択の復元
-    const tagSelect = document.querySelector('select[name=tags]');
+    document.getElementById('titleInput').value = incident.title;
+    document.getElementById('categorySelect').value = String(incident.category_id);
+    document.getElementById('statusSelect').value = String(incident.status_id);
+    document.getElementById('infoTextarea').value = incident.info_md || "";
+    document.getElementById('startAtInput').value = incident.start_at ? incident.start_at.slice(0,16) : '';
+    document.getElementById('endAtInput').value = incident.end_at ? incident.end_at.slice(0,16) : '';
+
+    const tagSelect = document.getElementById('tagsSelect');
+    const tagIds = incident.tag_ids.map(String);
     Array.from(tagSelect.options).forEach(option => {
-      option.selected = incident.tag_ids.includes(option.value);
+      option.selected = tagIds.includes(option.value);
     });
-    
+
     updatePreview(incident.info_md || '');
 
-    // 編集モードに切り替え：actionを更新
     const form = document.getElementById('incidentForm');
     form.action = `/admin/incidents/edit/${incident.id}`;
 
     document.getElementById('editNotice').classList.remove('d-none');
     document.getElementById('editingCode').innerText = incident.code || '';
+
+    // Discord通知チェックを編集時リセット
+    document.getElementById('discordNotify').checked = false;
+
   } catch (error) {
     console.error('編集データの読み込みエラー:', error);
     alert('編集データの読み込みに失敗しました。');
   }
-}
+};
 
-function cancelEdit() {
+const cancelEdit = () => {
   const form = document.getElementById('incidentForm');
   form.reset();
   form.action = "/admin/incidents/add";
   document.getElementById('incidentId').value = '';
   document.getElementById('preview').innerHTML = '';
   document.getElementById('editNotice').classList.add('d-none');
-}
 
-document.getElementById("incidentForm").addEventListener("submit", function(e) {
-  const form = e.target;
-  setTimeout(() => {
-    cancelEdit(); // resetとactionの復元を含む
-  }, 100);
+  // Discord通知チェックリセット
+  document.getElementById('discordNotify').checked = false;
+};
+
+document.getElementById("incidentForm").addEventListener("submit", e => {
+  setTimeout(cancelEdit, 100);
 });
 
 let sortDir = true;
 let currentSortedTh = null;
 
-function sortTable(colIndex, th) {
+const sortTable = (colIndex, th) => {
   const table = document.getElementById("incidentTable");
   const rows = Array.from(table.tBodies[0].rows);
 
@@ -237,7 +237,7 @@ function sortTable(colIndex, th) {
   th.querySelector("span").textContent = sortDir ? '▲' : '▼';
   currentSortedTh = th;
   sortDir = !sortDir;
-}
+};
 </script>
 
 </body>
