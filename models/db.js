@@ -1,5 +1,5 @@
 const Database = require('better-sqlite3');
-const db = new Database('database.db');
+const db = new Database('./db/database.db');
 
 // incidents テーブル（障害情報）
 db.exec(`
