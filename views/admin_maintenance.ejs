@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>障害管理</title>
+  <title>メンテナンス管理</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
@@ -18,8 +18,8 @@
     <a class="navbar-brand" href="#">管理画面</a>
     <div class="collapse navbar-collapse">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link active" href="/admin/incidents">障害一覧</a></li>
-        <li class="nav-item"><a class="nav-link" href="/admin/maintenance">メンテナンス一覧</a></li>
+        <li class="nav-item"><a class="nav-link" href="/admin/incidents">障害一覧</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/admin/maintenance">メンテナンス一覧</a></li>
         <li class="nav-item"><a class="nav-link" href="/admin/settings">設定管理</a></li>
         <li class="nav-item"><a class="nav-link" href="/">お知らせページ</a></li>
       </ul>
@@ -29,15 +29,15 @@
 
 <div class="container my-4">
   <h2>新規登録 / 編集</h2>
-  <form id="incidentForm" method="POST" action="/admin/incidents/add">
-    <input type="hidden" name="id" id="incidentId" />
+  <form id="maintenanceForm" method="POST" action="/admin/maintenance/add">
+    <input type="hidden" name="id" id="maintenanceId" />
     <div id="editNotice" class="alert alert-warning d-none">
-      編集中: <span id="editingCode"></span>
+      編集中: <span id="editingTitle"></span>
       <button type="button" class="btn btn-sm btn-secondary ms-3" onclick="cancelEdit()">キャンセル</button>
     </div>
 
     <div class="mb-3">
-      <label class="form-label" for="titleInput">案件名</label>
+      <label class="form-label" for="titleInput">メンテナンスタイトル</label>
       <input id="titleInput" type="text" name="title" class="form-control" required />
     </div>
     <div class="mb-3">
@@ -57,16 +57,16 @@
       </select>
     </div>
     <div class="mb-3">
-      <label class="form-label" for="infoTextarea">提供情報（Markdown）</label>
-      <textarea id="infoTextarea" name="info_md" class="form-control" rows="4" oninput="updatePreview(this.value)"></textarea>
+      <label class="form-label" for="descriptionTextarea">内容（Markdown）</label>
+      <textarea id="descriptionTextarea" name="description" class="form-control" rows="4" oninput="updatePreview(this.value)"></textarea>
     </div>
     <div class="mb-3">
-      <label class="form-label" for="startAtInput">開始日時</label>
-      <input id="startAtInput" type="datetime-local" name="start_at" class="form-control" required />
+      <label class="form-label" for="startTimeInput">開始日時</label>
+      <input id="startTimeInput" type="datetime-local" name="start_time" class="form-control" required />
     </div>
     <div class="mb-3">
-      <label class="form-label" for="endAtInput">終了日時（継続中の場合は空欄）</label>
-      <input id="endAtInput" type="datetime-local" name="end_at" class="form-control" />
+      <label class="form-label" for="endTimeInput">終了日時（未定の場合は空欄）</label>
+      <input id="endTimeInput" type="datetime-local" name="end_time" class="form-control" />
     </div>
     <div class="mb-3">
       <label class="form-label">プレビュー</label>
@@ -90,24 +90,24 @@
   </form>
 
   <hr />
-  <h2>障害一覧</h2>
-  <table class="table table-bordered table-hover" id="incidentTable">
+  <h2>メンテナンス一覧</h2>
+  <table class="table table-bordered table-hover" id="maintenanceTable">
     <thead>
       <tr>
-        <th class="sortable" onclick="sortTable(0, this)">管理番号 <span></span></th>
+        <th class="sortable" onclick="sortTable(0, this)">ID <span></span></th>
         <th class="sortable" onclick="sortTable(1, this)">カテゴリ <span></span></th>
-        <th class="sortable" onclick="sortTable(2, this)">案件名 <span></span></th>
+        <th class="sortable" onclick="sortTable(2, this)">タイトル <span></span></th>
         <th class="sortable" onclick="sortTable(3, this)">ステータス <span></span></th>
         <th class="sortable" onclick="sortTable(4, this)">タグ <span></span></th>
-        <th>日時</th>
-        <th>提供情報</th>
+        <th>期間</th>
+        <th>内容</th>
         <th>操作</th>
       </tr>
     </thead>
     <tbody>
-      <% incidents.forEach(item => { %>
+      <% maintenances.forEach(item => { %>
         <tr class="<%= item.is_hidden ? 'table-secondary' : '' %>">
-          <td><%= item.code %></td>
+          <td><%= item.id %></td>
           <td><%= item.category %></td>
           <td><%= item.title %></td>
           <td><span class="badge" style="background-color:<%= item.status_color %>;"><%= item.status %></span></td>
@@ -116,28 +116,27 @@
               <span class="badge bg-secondary me-1"><%= tag %></span>
             <% }) %>
           </td>
-          <td><%= item.start_at %> ～ <%= item.end_at || '継続中' %></td>
-          <td><div><%= (item.info_md || '').slice(0, 300) %></div></td>
+          <td><%= item.start_time %> ～ <%= item.end_time || '未定' %></td>
+          <td><div><%= (item.description || '').slice(0, 300) %></div></td>
           <td>
             <button
               class="btn btn-sm btn-outline-primary"
-              onclick="editIncidentFromData(this)"
-              data-incident-id="<%= item.id %>"
-              data-incident-code="<%= item.code %>"
-              data-incident-title="<%= item.title %>"
-              data-incident-category="<%= item.category_id %>"
-              data-incident-status="<%= item.status_id %>"
-              data-incident-info="<%= (item.info_md || '').replace(/"/g, '&quot;') %>"
-              data-incident-start="<%= item.start_at %>"
-              data-incident-end="<%= item.end_at || '' %>"
-              data-incident-tags="<%= (item.tag_ids || []).join(',') %>"
+              onclick="editMaintenanceFromData(this)"
+              data-maintenance-id="<%= item.id %>"
+              data-maintenance-title="<%= item.title %>"
+              data-maintenance-category="<%= item.category_id %>"
+              data-maintenance-status="<%= item.status_id %>"
+              data-maintenance-description="<%= (item.description || '').replace(/\"/g, '&quot;') %>"
+              data-maintenance-start="<%= item.start_time %>"
+              data-maintenance-end="<%= item.end_time || '' %>"
+              data-maintenance-tags="<%= (item.tag_ids || []).join(',') %>"
             >
               編集
             </button>
-            <form method="POST" action="/admin/incidents/hide/<%= item.id %>" class="d-inline">
+            <form method="POST" action="/admin/maintenance/hide/<%= item.id %>" class="d-inline">
               <button class="btn btn-sm btn-outline-warning"><%= item.is_hidden ? '表示' : '非表示' %></button>
             </form>
-            <form method="POST" action="/admin/incidents/delete/<%= item.id %>" class="d-inline" onsubmit="return confirm('削除してもよろしいですか？');">
+            <form method="POST" action="/admin/maintenance/delete/<%= item.id %>" class="d-inline" onsubmit="return confirm('削除してもよろしいですか？');">
               <button class="btn btn-sm btn-outline-danger">削除</button>
             </form>
           </td>
@@ -156,45 +155,42 @@ const updatePreview = md => {
   }
 };
 
-const editIncidentFromData = button => {
+const editMaintenanceFromData = button => {
   try {
-    const incident = {
-      id: button.dataset.incidentId,
-      code: button.dataset.incidentCode,
-      title: button.dataset.incidentTitle,
-      category_id: button.dataset.incidentCategory,
-      status_id: button.dataset.incidentStatus,
-      info_md: button.dataset.incidentInfo.replace(/&quot;/g, '"').replace(/\\n/g, '\n'),
-      start_at: button.dataset.incidentStart,
-      end_at: button.dataset.incidentEnd,
-      tag_ids: button.dataset.incidentTags ? button.dataset.incidentTags.split(',') : []
+    const maintenance = {
+      id: button.dataset.maintenanceId,
+      title: button.dataset.maintenanceTitle,
+      category_id: button.dataset.maintenanceCategory,
+      status_id: button.dataset.maintenanceStatus,
+      description: button.dataset.maintenanceDescription.replace(/&quot;/g, '"').replace(/\\n/g, '\n'),
+      start_time: button.dataset.maintenanceStart,
+      end_time: button.dataset.maintenanceEnd,
+      tag_ids: button.dataset.maintenanceTags ? button.dataset.maintenanceTags.split(',') : []
     };
 
-    document.getElementById('incidentId').value = incident.id;
-    document.getElementById('titleInput').value = incident.title;
-    document.getElementById('categorySelect').value = String(incident.category_id);
-    document.getElementById('statusSelect').value = String(incident.status_id);
-    document.getElementById('infoTextarea').value = incident.info_md || "";
-    document.getElementById('startAtInput').value = incident.start_at ? incident.start_at.slice(0,16) : '';
-    document.getElementById('endAtInput').value = incident.end_at ? incident.end_at.slice(0,16) : '';
+    document.getElementById('maintenanceId').value = maintenance.id;
+    document.getElementById('titleInput').value = maintenance.title;
+    document.getElementById('categorySelect').value = String(maintenance.category_id);
+    document.getElementById('statusSelect').value = String(maintenance.status_id);
+    document.getElementById('descriptionTextarea').value = maintenance.description || "";
+    document.getElementById('startTimeInput').value = maintenance.start_time ? maintenance.start_time.slice(0,16) : '';
+    document.getElementById('endTimeInput').value = maintenance.end_time ? maintenance.end_time.slice(0,16) : '';
 
     const tagSelect = document.getElementById('tagsSelect');
-    const tagIds = incident.tag_ids.map(String);
+    const tagIds = maintenance.tag_ids.map(String);
     Array.from(tagSelect.options).forEach(option => {
       option.selected = tagIds.includes(option.value);
     });
 
-    updatePreview(incident.info_md || '');
+    updatePreview(maintenance.description || '');
 
-    const form = document.getElementById('incidentForm');
-    form.action = `/admin/incidents/edit/${incident.id}`;
+    const form = document.getElementById('maintenanceForm');
+    form.action = `/admin/maintenance/edit/${maintenance.id}`;
 
     document.getElementById('editNotice').classList.remove('d-none');
-    document.getElementById('editingCode').innerText = incident.code || '';
+    document.getElementById('editingTitle').innerText = maintenance.title || '';
 
-    // Discord通知チェックを編集時リセット
     document.getElementById('discordNotify').checked = false;
-
   } catch (error) {
     console.error('編集データの読み込みエラー:', error);
     alert('編集データの読み込みに失敗しました。');
@@ -202,18 +198,15 @@ const editIncidentFromData = button => {
 };
 
 const cancelEdit = () => {
-  const form = document.getElementById('incidentForm');
+  const form = document.getElementById('maintenanceForm');
   form.reset();
-  form.action = "/admin/incidents/add";
-  document.getElementById('incidentId').value = '';
+  form.action = "/admin/maintenance/add";
   document.getElementById('preview').innerHTML = '';
   document.getElementById('editNotice').classList.add('d-none');
-
-  // Discord通知チェックリセット
   document.getElementById('discordNotify').checked = false;
 };
 
-document.getElementById("incidentForm").addEventListener("submit", e => {
+document.getElementById("maintenanceForm").addEventListener("submit", e => {
   setTimeout(cancelEdit, 100);
 });
 
@@ -221,7 +214,7 @@ let sortDir = true;
 let currentSortedTh = null;
 
 const sortTable = (colIndex, th) => {
-  const table = document.getElementById("incidentTable");
+  const table = document.getElementById("maintenanceTable");
   const rows = Array.from(table.tBodies[0].rows);
 
   rows.sort((a, b) => {

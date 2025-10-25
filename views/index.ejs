@@ -1,84 +1,382 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-bs-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>故障情報提供ページ（軽量版）</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <title>障害情報・メンテナンス情報お知らせサイト | 島根データセンター友の会</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    th.sortable { cursor: pointer; user-select: none; }
-    th span { margin-left: 6px; color: #666; }
-    h1 { font-size: 3rem; } 
-    td, th {
-      white-space: normal;
-      word-break: break-word;
+    body {
+      background-color: var(--bs-body-bg);
+      color: var(--bs-body-color);
+      transition: background-color .3s, color .3s;
+    }
+    h1 { font-size: 2.4rem; font-weight: 600; }
+    .badge { font-size: 0.85rem; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .incident-card, .maint-card {
+      background: var(--bs-card-bg, #fff);
+      border-radius: 1rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: all .2s ease;
+    }
+    [data-bs-theme="dark"] .incident-card, [data-bs-theme="dark"] .maint-card {
+      background: #1f1f1f;
+      box-shadow: 0 2px 8px rgba(255,255,255,0.05);
+    }
+    .incident-card:hover, .maint-card:hover { transform: scale(1.01); }
+
+    .truncate {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .filter-box {
+      border: 1px solid #ccc;
+      border-radius: 1rem;
+      padding: 1rem;
+      background: var(--bs-body-bg);
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+
+    .filter-box select {
+      border-radius: 0.5rem;
+    }
+
+    .theme-toggle {
+      border: none;
+      background: transparent;
+      font-size: 1.3rem;
+      color: var(--bs-body-color);
+      transition: color .3s;
+    }
+
+    #toastContainer {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 1055;
+    }
+
+    .content-area {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .nav-tabs {
+      justify-content: center;
+    }
+
+    /* フィルタボタン類を1行に固定 */
+    #filterToggle, #clearFilters {
+      white-space: nowrap;
+    }
+
+    /* 現在のフィルタバーの見やすさ改善 */
+    #activeFilters {
+      background-color: var(--bs-light);
+      color: var(--bs-dark);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    [data-bs-theme="dark"] #activeFilters {
+      background-color: #1c2833;
+      border: 1px solid #2e4053;
+      color: #dbe9f9;
+    }
+
+    @media (max-width: 768px) {
+      .content-area { max-width: 95%; }
     }
   </style>
 </head>
 <body>
-<div class="container-fluid my-4">
-  <h1>島根データセンター友の会 障害情報提供（軽量版）</h1>
 
-  <!-- Responsive Table Wrapper -->
-  <div class="table-responsive">
-    <table class="table table-bordered table-hover" id="incidentTable">
-      <thead>
-        <tr>
-          <th class="sortable" onclick="sortTable(0, this)">管理番号 <span></span></th>
-          <th class="sortable" onclick="sortTable(1, this)">カテゴリ <span></span></th>
-          <th class="sortable" onclick="sortTable(2, this)">案件名 <span></span></th>
-          <th class="sortable" onclick="sortTable(3, this)">ステータス <span></span></th>
-          <th class="sortable" onclick="sortTable(4, this)">タグ <span></span></th>
-          <th>日時</th>
-          <th>提供情報</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% incidents.forEach(incident => { %>
-          <tr>
-            <td><%= incident.code %></td>
-            <td><%= incident.category %></td>
-            <td><%= incident.title %></td>
-            <td>
-              <span class="badge bg-<%= incident.status_color %>"><%= incident.status %></span>
-            </td>
-            <td>
-              <%- incident.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join(' ') %>
-            </td>
-            <td><%= incident.start_at %> ~ <%= incident.end_at || "継続中" %></td>
-            <td><div><%- incident.info_html %></div></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+<div class="container my-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 gap-3">
+    <h1 class="mb-0 flex-grow-1"><i class="bi bi-activity me-2"></i>SDCC ONWv3 稼働状況ポータル</h1>
+
+    <div class="d-flex align-items-center gap-3 flex-nowrap">
+      <div class="d-flex align-items-center gap-2 flex-nowrap">
+        <span><i class="bi bi-stopwatch me-1"></i> 自動更新:</span>
+        <select id="refreshInterval" class="form-select form-select-sm w-auto">
+          <option value="0">しない</option>
+          <option value="10000">10秒</option>
+          <option value="30000">30秒</option>
+          <option value="60000">1分</option>
+          <option value="300000" selected>5分</option>
+          <option value="1800000" selected>30分</option>
+        </select>
+        <button id="manualRefresh" class="btn btn-outline-primary btn-sm" title="今すぐ更新">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <button id="themeToggle" class="btn btn-outline-secondary btn-sm ms-2" title="ダークモード切替">
+        <i class="bi bi-moon-fill"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
+    <div class="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap">
+      <input id="searchInput" type="text" class="form-control" placeholder="キーワードで検索（案件名・カテゴリ・タグなど）">
+      <button id="filterToggle" class="btn btn-outline-secondary btn-sm flex-shrink-0">
+        <i class="bi bi-funnel"></i> フィルタを開く
+      </button>
+      <button id="clearFilters" class="btn btn-outline-danger btn-sm flex-shrink-0">
+        <i class="bi bi-x-circle"></i> フィルタ解除
+      </button>
+    </div>
+  </div>
+
+  <!-- 現在のフィルタ内容表示 -->
+  <div id="activeFilters" class="alert alert-info py-2 px-3 small" style="display:none;"></div>
+</div>
+
+<!-- コンテンツ -->
+<div class="content-area">
+  <div class="filter-box" id="filterBox">
+    <h5 class="mb-3"><i class="bi bi-funnel me-2"></i>詳細フィルタ</h5>
+    <div class="d-flex flex-wrap gap-3">
+      <select id="statusFilter" class="form-select" multiple size="4" style="min-width:180px;">
+        <% statuses.forEach(s=>{ %><option value="<%= s.name %>"><%= s.name %></option><% }) %>
+      </select>
+      <select id="categoryFilter" class="form-select" multiple size="4" style="min-width:180px;">
+        <% categories.forEach(c=>{ %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
+      </select>
+      <select id="tagFilter" class="form-select" multiple size="4" style="min-width:180px;">
+        <% tags.forEach(t=>{ %><option value="<%= t.name %>"><%= t.name %></option><% }) %>
+      </select>
+    </div>
+  </div>
+
+  <ul class="nav nav-tabs mb-4 justify-content-start" id="statusTabs">
+    <li class="nav-item"><a class="nav-link active" href="#" data-tab="incidents"><i class="bi bi-exclamation-circle me-1"></i>障害情報</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="maintenance"><i class="bi bi-tools me-1"></i>メンテナンス情報</a></li>
+  </ul>
+
+  <div id="tab-incidents" class="tab-content active">
+    <% if (incidents.length === 0) { %>
+      <div class="alert alert-secondary text-center">現在、報告されている障害はありません。</div>
+    <% } %>
+    <% incidents.forEach(incident => { %>
+      <div class="incident-card" data-title="<%= incident.title %>" data-category="<%= incident.category %>" data-tags="<%= incident.tags.join(' ') %>">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h4><i class="bi bi-exclamation-circle me-2 text-danger"></i><%= incident.title %></h4>
+          <span class="badge <%= incident.status_color %>"><%= incident.status %></span>
+        </div>
+        <div class="text-muted mb-2">
+          <i class="bi bi-hash me-1"></i>管理番号: <strong><%= incident.code %></strong> |
+          <i class="bi bi-folder2 me-1"></i><%= incident.category %>
+        </div>
+        <div class="mb-2">
+          <%- incident.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join(' ') %>
+        </div>
+        <div class="truncate"><%- incident.info_html %></div>
+        <button class="btn btn-sm btn-outline-primary mt-2" onclick="showDetails('<%- incident.title %>', `<%- incident.info_html %>`)">詳細を表示</button>
+      </div>
+    <% }) %>
+  </div>
+
+  <div id="tab-maintenance" class="tab-content">
+    <% if (maintenance.length === 0) { %>
+      <div class="alert alert-secondary text-center">現在、予定されているメンテナンスはありません。</div>
+    <% } %>
+    <% maintenance.forEach(item => { %>
+      <div class="maint-card" data-title="<%= item.title %>" data-category="<%= item.category %>" data-tags="<%= item.tags.join(' ') %>">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h4><i class="bi bi-tools me-2 text-info"></i><%= item.title %></h4>
+          <span class="badge <%= item.status_color %>"><%= item.status %></span>
+        </div>
+        <div class="text-muted mb-2">
+          <i class="bi bi-calendar2-week me-1"></i><%= item.start_time %> ～ <%= item.end_time || "予定中" %>
+          | <i class="bi bi-folder2 me-1"></i><%= item.category %>
+        </div>
+        <div class="mb-2">
+          <%- item.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join(' ') %>
+        </div>
+        <div class="truncate"><%- item.info_html %></div>
+        <button class="btn btn-sm btn-outline-primary mt-2" onclick="showDetails('<%- item.title %>', `<%- item.info_html %>`)">詳細を表示</button>
+      </div>
+    <% }) %>
   </div>
 </div>
 
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let sortDir = true;
-let currentSortedTh = null;
+let refreshTimer=null;
 
-function sortTable(colIndex, th) {
-  const table = document.getElementById("incidentTable");
-  const rows = [...table.tBodies[0].rows];
+// ダークモード
+const htmlEl=document.documentElement;
+const themeToggleBtn=document.getElementById('themeToggle');
+function setTheme(theme){
+  htmlEl.setAttribute('data-bs-theme',theme);
+  localStorage.setItem('theme',theme);
+  themeToggleBtn.innerHTML=theme==='dark'?'<i class="bi bi-sun-fill"></i>':'<i class="bi bi-moon-fill"></i>';
+}
+themeToggleBtn.addEventListener('click',()=>setTheme(htmlEl.getAttribute('data-bs-theme')==='dark'?'light':'dark'));
+setTheme(localStorage.getItem('theme')||'light');
 
-  rows.sort((a, b) => {
-    const A = a.cells[colIndex].innerText.trim();
-    const B = b.cells[colIndex].innerText.trim();
-    return sortDir ? A.localeCompare(B) : B.localeCompare(A);
+// トースト通知
+function showToast(message,type='success'){
+  const container=document.getElementById('toastContainer');
+  const toastEl=document.createElement('div');
+  toastEl.className=`toast align-items-center text-bg-${type} border-0`;
+  toastEl.role='alert';
+  toastEl.innerHTML=`
+    <div class="d-flex">
+      <div class="toast-body">${message}</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>`;
+  container.appendChild(toastEl);
+  const toast=new bootstrap.Toast(toastEl,{delay:2500});
+  toast.show();
+  toastEl.addEventListener('hidden.bs.toast',()=>toastEl.remove());
+}
+
+
+// フィルタ開閉
+const filterBox=document.getElementById('filterBox');
+const filterToggle=document.getElementById('filterToggle');
+filterToggle.addEventListener('click',()=>{
+  const open=filterBox.style.display==='block';
+  filterBox.style.display=open?'none':'block';
+  filterToggle.innerHTML=open?'<i class="bi bi-funnel"></i> フィルタを開く':'<i class="bi bi-x-circle"></i> フィルタを隠す';
+});
+
+// フィルタ適用 + 表示更新
+function applyFilters(){
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  const statuses=Array.from(document.getElementById('statusFilter').selectedOptions).map(o=>o.value);
+  const categories=Array.from(document.getElementById('categoryFilter').selectedOptions).map(o=>o.value);
+  const tags=Array.from(document.getElementById('tagFilter').selectedOptions).map(o=>o.value);
+
+  document.querySelectorAll('.incident-card, .maint-card').forEach(card=>{
+    const text=(card.dataset.title+' '+card.dataset.category+' '+card.dataset.tags).toLowerCase();
+    const cardStatus=card.querySelector('.badge').innerText.trim();
+    const matchText=text.includes(q);
+    const matchStatus=statuses.length===0||statuses.includes(cardStatus);
+    const matchCategory=categories.length===0||categories.includes(card.dataset.category);
+    const matchTag=tags.length===0||tags.some(t=>card.dataset.tags.includes(t));
+    card.style.display=matchText&&matchStatus&&matchCategory&&matchTag?'':'none';
   });
 
-  rows.forEach(row => table.tBodies[0].appendChild(row));
+  const activeFilters=document.getElementById('activeFilters');
+  const parts=[];
+  if(q) parts.push(`キーワード: 「${q}」`);
+  if(statuses.length) parts.push(`ステータス: 「${statuses.join('」「')}」`);
+  if(categories.length) parts.push(`カテゴリ: 「${categories.join('」「')}」`);
+  if(tags.length) parts.push(`タグ: 「${tags.join('」「')}」`);
 
-  if (currentSortedTh && currentSortedTh !== th) {
-    currentSortedTh.querySelector("span").textContent = '';
+  if(parts.length>0){
+    activeFilters.style.display='block';
+    activeFilters.innerHTML=`<i class="bi bi-funnel-fill me-1"></i><strong>現在のフィルタ:</strong> ${parts.join(' | ')}`;
+  }else{
+    activeFilters.style.display='none';
+    activeFilters.innerHTML='';
   }
-
-  th.querySelector("span").textContent = sortDir ? "▲" : "▼";
-  currentSortedTh = th;
-  sortDir = !sortDir;
 }
+['searchInput','statusFilter','categoryFilter','tagFilter'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',applyFilters);
+  document.getElementById(id).addEventListener('change',applyFilters);
+});
+
+// フィルタ解除ボタン
+document.getElementById('clearFilters').addEventListener('click',()=>{
+  document.getElementById('searchInput').value='';
+  ['statusFilter','categoryFilter','tagFilter'].forEach(id=>{
+    Array.from(document.getElementById(id).options).forEach(opt=>opt.selected=false);
+  });
+  applyFilters();
+});
+
+// タブ切替
+document.querySelectorAll('[data-tab]').forEach(tab=>{
+  tab.addEventListener('click',e=>{
+    e.preventDefault();
+    document.querySelectorAll('.nav-link').forEach(el=>el.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+// モーダル詳細
+function showDetails(title,html){
+  document.getElementById('modalTitle').innerText=title;
+  document.getElementById('modalBody').innerHTML=html;
+  new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+// 🔁 自動更新
+function setAutoRefresh(){
+  const interval=parseInt(document.getElementById('refreshInterval').value);
+  if(refreshTimer)clearInterval(refreshTimer);
+  if(interval>0)refreshTimer=setInterval(fetchLatestData,interval);
+}
+document.getElementById('refreshInterval').addEventListener('change',setAutoRefresh);
+document.getElementById('manualRefresh').addEventListener('click',()=>fetchLatestData(true));
+
+async function fetchLatestData(manual=false){
+  try{
+    const currentFilters={
+      query:document.getElementById('searchInput').value,
+      statuses:Array.from(document.getElementById('statusFilter').selectedOptions).map(o=>o.value),
+      categories:Array.from(document.getElementById('categoryFilter').selectedOptions).map(o=>o.value),
+      tags:Array.from(document.getElementById('tagFilter').selectedOptions).map(o=>o.value)
+    };
+    const res=await fetch(window.location.href,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const html=await res.text();
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    document.getElementById('tab-incidents').innerHTML=doc.getElementById('tab-incidents').innerHTML;
+    document.getElementById('tab-maintenance').innerHTML=doc.getElementById('tab-maintenance').innerHTML;
+    document.getElementById('searchInput').value=currentFilters.query;
+    const reselect=(id,vals)=>Array.from(document.getElementById(id).options).forEach(opt=>opt.selected=vals.includes(opt.value));
+    reselect('statusFilter',currentFilters.statuses);
+    reselect('categoryFilter',currentFilters.categories);
+    reselect('tagFilter',currentFilters.tags);
+    applyFilters();
+    const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    showToast(manual?`最新データを取得しました（${time}）`:`自動更新完了（${time}）`,'success');
+  }catch(e){
+    console.error(e);
+    showToast('データの更新に失敗しました','danger');
+  }
+}
+
+//URLハッシュ（#maintenance）でタブを自動選択
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = window.location.hash;
+  if (hash === '#maintenance') {
+    const maintTab = document.querySelector('[data-tab="maintenance"]');
+    if (maintTab) maintTab.click();
+  }
+});
+
+setAutoRefresh();
 </script>
 </body>
 </html>
-

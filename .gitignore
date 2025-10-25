@@ -141,3 +141,6 @@ vite.config.ts.timestamp-*
 
 #db
 *.db
+
+#memo
+memo

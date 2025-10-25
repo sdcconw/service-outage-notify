@@ -17,6 +17,23 @@ db.exec(`
   );
 `);
 
+// maintenance_schedules（計画メンテナンス）
+db.exec(`
+  CREATE TABLE IF NOT EXISTS maintenance_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    category_id INTEGER,
+    status_id INTEGER,
+    description TEXT,
+    service_name TEXT,
+    start_time DATETIME,
+    end_time DATETIME,
+    status TEXT DEFAULT '計画済',
+    is_hidden INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 // tags テーブル
 db.exec(`
   CREATE TABLE IF NOT EXISTS tags (
@@ -29,6 +46,13 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS incident_tags (
     incident_id INTEGER,
+    tag_id INTEGER
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS maintenance_tags (
+    maintenance_id INTEGER,
     tag_id INTEGER
   );
 `);
