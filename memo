@@ -1,0 +1,12 @@
+docker build ./ -t soi01
+
+
+
+docker run -d \
+  --name soi01 \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -v $(pwd)/db:/app/db/ \
+  soi01
+
+
