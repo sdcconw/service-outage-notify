@@ -35,15 +35,15 @@ function getStatusColor(status) {
 
 function attachTagsToMaintenances(maintenances) {
   const maintenanceTags = db.prepare(`
-    SELECT mt.maintenance_id, t.name
+    SELECT mt.maintenance_id, t.id AS tag_id, t.name
     FROM maintenance_tags mt
     JOIN tags t ON mt.tag_id = t.id
   `).all();
 
   maintenances.forEach(m => {
-    m.tags = maintenanceTags
-      .filter(mt => mt.maintenance_id === m.id)
-      .map(mt => mt.name);
+    const related = maintenanceTags.filter(mt => mt.maintenance_id === m.id);
+    m.tags = related.map(mt => mt.name);
+    m.tag_ids = related.map(mt => String(mt.tag_id)); // ← ★ tag_ids を追加
 
     // ステータスカラー付与
     m.status_color = getStatusColorCode(m.status);

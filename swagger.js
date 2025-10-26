@@ -15,16 +15,19 @@ const options = {
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          bearerFormat: 'JWT'
-        }
-      }
+          bearerFormat: 'JWT',
+        },
+        apiKeyAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-api-key',
+        },
+      },
     },
-    security: [{
-      bearerAuth: []
-    }]
   },
-  apis: ['./routes/api.js']
+  apis: ['./routes/*.js'],
 };
 
 const specs = swaggerJsdoc(options);
 module.exports = { swaggerUi, specs };
+
