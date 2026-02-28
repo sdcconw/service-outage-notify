@@ -12,8 +12,17 @@ const { resolveStatusColor } = require('../models/statusColor');
 const auth = requireApiAuth;
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
-const PUBLIC_INCIDENTS_URL = `${PUBLIC_BASE_URL}/`;
-const PUBLIC_MAINTENANCE_URL = `${PUBLIC_BASE_URL}/#maintenance`;
+const PUBLIC_INCIDENTS_PATH = process.env.PUBLIC_INCIDENTS_PATH || '/';
+const PUBLIC_MAINTENANCE_PATH = process.env.PUBLIC_MAINTENANCE_PATH || '/#maintenance';
+
+function buildPublicUrl(baseUrl, pathOrUrl) {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  const normalizedPath = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
+  return `${baseUrl}${normalizedPath}`;
+}
+
+const PUBLIC_INCIDENTS_URL = buildPublicUrl(PUBLIC_BASE_URL, PUBLIC_INCIDENTS_PATH);
+const PUBLIC_MAINTENANCE_URL = buildPublicUrl(PUBLIC_BASE_URL, PUBLIC_MAINTENANCE_PATH);
 
 /** 共通レスポンス関数 */
 function respond(res, success, data = null, error = null, status = 200) {

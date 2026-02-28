@@ -52,11 +52,14 @@ ADMIN_PASS=strong-password
 JWT_SECRET=your-jwt-secret
 API_KEY=your-api-key
 PUBLIC_BASE_URL=https://outage.example.com
+PUBLIC_INCIDENTS_PATH=/
+PUBLIC_MAINTENANCE_PATH=/#maintenance
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 PORT=3000
 ```
 
-- `PUBLIC_BASE_URL` は Discord 通知リンク生成に使用します。
+- `PUBLIC_BASE_URL` は Discord 通知リンクのベースURLです。
+- `PUBLIC_INCIDENTS_PATH` / `PUBLIC_MAINTENANCE_PATH` は通知先パス（または絶対URL）です。
 - `DISCORD_WEBHOOK_URL` は未設定でも動作します（通知のみ無効）。
 - `PORT` は未設定時 `3000` です。
 

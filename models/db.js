@@ -166,45 +166,48 @@ db.exec(`
   USING fts5(title, description, tokenize='unicode61');
 `);
 
+db.exec('DROP TRIGGER IF EXISTS incidents_ai');
+db.exec('DROP TRIGGER IF EXISTS incidents_au');
+db.exec('DROP TRIGGER IF EXISTS incidents_ad');
+db.exec('DROP TRIGGER IF EXISTS maintenance_ai');
+db.exec('DROP TRIGGER IF EXISTS maintenance_au');
+db.exec('DROP TRIGGER IF EXISTS maintenance_ad');
+
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS incidents_ai AFTER INSERT ON incidents BEGIN
+  CREATE TRIGGER incidents_ai AFTER INSERT ON incidents BEGIN
     INSERT INTO incidents_fts(rowid, title, info_md)
     VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.info_md, ''));
   END;
 `);
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS incidents_au AFTER UPDATE ON incidents BEGIN
-    INSERT INTO incidents_fts(incidents_fts, rowid, title, info_md)
-    VALUES('delete', old.id, old.title, old.info_md);
+  CREATE TRIGGER incidents_au AFTER UPDATE ON incidents BEGIN
+    DELETE FROM incidents_fts WHERE rowid = old.id;
     INSERT INTO incidents_fts(rowid, title, info_md)
     VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.info_md, ''));
   END;
 `);
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS incidents_ad AFTER DELETE ON incidents BEGIN
-    INSERT INTO incidents_fts(incidents_fts, rowid, title, info_md)
-    VALUES('delete', old.id, old.title, old.info_md);
+  CREATE TRIGGER incidents_ad AFTER DELETE ON incidents BEGIN
+    DELETE FROM incidents_fts WHERE rowid = old.id;
   END;
 `);
 
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS maintenance_ai AFTER INSERT ON maintenance_schedules BEGIN
+  CREATE TRIGGER maintenance_ai AFTER INSERT ON maintenance_schedules BEGIN
     INSERT INTO maintenance_fts(rowid, title, description)
     VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.description, ''));
   END;
 `);
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS maintenance_au AFTER UPDATE ON maintenance_schedules BEGIN
-    INSERT INTO maintenance_fts(maintenance_fts, rowid, title, description)
-    VALUES('delete', old.id, old.title, old.description);
+  CREATE TRIGGER maintenance_au AFTER UPDATE ON maintenance_schedules BEGIN
+    DELETE FROM maintenance_fts WHERE rowid = old.id;
     INSERT INTO maintenance_fts(rowid, title, description)
     VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.description, ''));
   END;
 `);
 db.exec(`
-  CREATE TRIGGER IF NOT EXISTS maintenance_ad AFTER DELETE ON maintenance_schedules BEGIN
-    INSERT INTO maintenance_fts(maintenance_fts, rowid, title, description)
-    VALUES('delete', old.id, old.title, old.description);
+  CREATE TRIGGER maintenance_ad AFTER DELETE ON maintenance_schedules BEGIN
+    DELETE FROM maintenance_fts WHERE rowid = old.id;
   END;
 `);
 
