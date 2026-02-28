@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const db = require('./models/db');
 const { ensureCsrfToken, verifyCsrfToken } = require('./middleware/csrf');
+const { createInMemoryRateLimiter } = require('./middleware/rateLimit');
 
 const trustProxy = Number(process.env.TRUST_PROXY || 1);
 const cookieSecure = process.env.COOKIE_SECURE
@@ -26,6 +27,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(ensureCsrfToken);
+
+const publicRateLimiter = createInMemoryRateLimiter({
+  enabled: process.env.PUBLIC_RATE_LIMIT_ENABLED,
+  windowMs: process.env.PUBLIC_RATE_LIMIT_WINDOW_MS,
+  maxRequests: process.env.PUBLIC_RATE_LIMIT_MAX_REQUESTS,
+  message: process.env.PUBLIC_RATE_LIMIT_MESSAGE || 'アクセスが集中しています。しばらくしてから再試行してください。',
+  skip: (req) => !(req.method === 'GET' && req.path === '/'),
+});
+app.use(publicRateLimiter);
 
 // ルーティング
 app.use('/', require('./routes/public'));

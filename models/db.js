@@ -50,6 +50,12 @@ if (!hasColumn('maintenance_schedules', 'code')) {
 
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_incidents_code_unique ON incidents(code)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_maintenance_code_unique ON maintenance_schedules(code)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_incidents_visibility_created ON incidents(is_hidden, created_at DESC)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents(category_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_maintenance_visibility_created ON maintenance_schedules(is_hidden, created_at DESC)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance_schedules(status_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_maintenance_category ON maintenance_schedules(category_id)');
 
 function formatCodeDateTime(dateValue) {
   const d = dateValue ? new Date(dateValue) : new Date();
@@ -100,6 +106,9 @@ db.exec(`
     tag_id INTEGER
   );
 `);
+db.exec('CREATE INDEX IF NOT EXISTS idx_incident_tags_incident ON incident_tags(incident_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_incident_tags_tag ON incident_tags(tag_id)');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_incident_tags_pair_unique ON incident_tags(incident_id, tag_id)');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS maintenance_tags (
@@ -107,6 +116,9 @@ db.exec(`
     tag_id INTEGER
   );
 `);
+db.exec('CREATE INDEX IF NOT EXISTS idx_maintenance_tags_maintenance ON maintenance_tags(maintenance_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_maintenance_tags_tag ON maintenance_tags(tag_id)');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_maintenance_tags_pair_unique ON maintenance_tags(maintenance_id, tag_id)');
 
 // categories テーブル
 db.exec(`
@@ -115,6 +127,7 @@ db.exec(`
     name TEXT
   );
 `);
+db.exec('CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name)');
 
 // statuses テーブル
 db.exec(`
@@ -124,6 +137,8 @@ db.exec(`
     color TEXT
   );
 `);
+db.exec('CREATE INDEX IF NOT EXISTS idx_statuses_name ON statuses(name)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)');
 
 // audit_logs テーブル
 db.exec(`
@@ -139,5 +154,72 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+db.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS incidents_fts
+  USING fts5(title, info_md, tokenize='unicode61');
+`);
+db.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS maintenance_fts
+  USING fts5(title, description, tokenize='unicode61');
+`);
+
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS incidents_ai AFTER INSERT ON incidents BEGIN
+    INSERT INTO incidents_fts(rowid, title, info_md)
+    VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.info_md, ''));
+  END;
+`);
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS incidents_au AFTER UPDATE ON incidents BEGIN
+    INSERT INTO incidents_fts(incidents_fts, rowid, title, info_md)
+    VALUES('delete', old.id, old.title, old.info_md);
+    INSERT INTO incidents_fts(rowid, title, info_md)
+    VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.info_md, ''));
+  END;
+`);
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS incidents_ad AFTER DELETE ON incidents BEGIN
+    INSERT INTO incidents_fts(incidents_fts, rowid, title, info_md)
+    VALUES('delete', old.id, old.title, old.info_md);
+  END;
+`);
+
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS maintenance_ai AFTER INSERT ON maintenance_schedules BEGIN
+    INSERT INTO maintenance_fts(rowid, title, description)
+    VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.description, ''));
+  END;
+`);
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS maintenance_au AFTER UPDATE ON maintenance_schedules BEGIN
+    INSERT INTO maintenance_fts(maintenance_fts, rowid, title, description)
+    VALUES('delete', old.id, old.title, old.description);
+    INSERT INTO maintenance_fts(rowid, title, description)
+    VALUES (new.id, IFNULL(new.title, ''), IFNULL(new.description, ''));
+  END;
+`);
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS maintenance_ad AFTER DELETE ON maintenance_schedules BEGIN
+    INSERT INTO maintenance_fts(maintenance_fts, rowid, title, description)
+    VALUES('delete', old.id, old.title, old.description);
+  END;
+`);
+
+function syncFtsTable(ftsTableName, sourceTableName, columns) {
+  const ftsCount = db.prepare(`SELECT COUNT(*) AS cnt FROM ${ftsTableName}`).get().cnt;
+  const srcCount = db.prepare(`SELECT COUNT(*) AS cnt FROM ${sourceTableName}`).get().cnt;
+  if (ftsCount === srcCount) return;
+  const cols = columns.join(', ');
+  db.exec(`DELETE FROM ${ftsTableName};`);
+  db.exec(`
+    INSERT INTO ${ftsTableName}(rowid, ${cols})
+    SELECT id, ${columns.map((c) => `IFNULL(${c}, '')`).join(', ')}
+    FROM ${sourceTableName};
+  `);
+}
+
+syncFtsTable('incidents_fts', 'incidents', ['title', 'info_md']);
+syncFtsTable('maintenance_fts', 'maintenance_schedules', ['title', 'description']);
 
 module.exports = db;

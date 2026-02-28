@@ -34,7 +34,7 @@
     }
     .content-area { max-width: 1200px; margin: 0 auto; }
     .filter-chip { cursor: pointer; }
-    #activeFilters { display: none; }
+    #activeFilters:empty { display: none !important; }
     .status-badge { color: #fff; }
     .meta-item { font-size: .9rem; color: var(--bs-secondary-color); }
     .last-updated { font-size: .9rem; color: var(--bs-secondary-color); }
@@ -70,7 +70,8 @@
       color: #e6edf3;
     }
     .search-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-    .search-input-wrap { flex: 1 1 560px; min-width: 240px; }
+    .search-input-wrap { flex: 1 1 520px; min-width: 240px; }
+    .pager-summary { font-size: .875rem; color: var(--bs-secondary-color); }
 
     @media (max-width: 768px) {
       .content-area { max-width: 95%; }
@@ -112,8 +113,15 @@
 
   <div class="search-toolbar mb-3">
     <div class="search-input-wrap">
-      <input id="searchInput" type="text" class="form-control" placeholder="キーワードで検索（案件名・カテゴリ・タグなど）">
+      <input id="searchInput" type="text" class="form-control" placeholder="キーワードで検索（案件名・カテゴリ・タグなど）" value="<%= filters.q %>">
     </div>
+    <label for="pageSizeSelect" class="small mb-0">表示件数</label>
+    <select id="pageSizeSelect" class="form-select form-select-sm w-auto">
+      <% pageSizeOptions.forEach((size) => { %>
+        <option value="<%= size %>" <%= filters.pageSize === size ? 'selected' : '' %>><%= size %></option>
+      <% }) %>
+    </select>
+    <button id="applyFiltersBtn" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>検索</button>
     <button
       id="desktopFilterToggle"
       class="btn btn-outline-secondary btn-sm"
@@ -127,7 +135,14 @@
     </button>
     <button id="clearFilters" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1"></i>フィルタ解除</button>
   </div>
-  <div id="activeFilters" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+  <div id="activeFilters" class="d-flex flex-wrap gap-2 mb-3">
+    <% activeFilterChips.forEach((chip) => { %>
+      <button class="btn btn-sm btn-outline-secondary rounded-pill filter-chip" data-type="<%= chip.type %>" data-value="<%= chip.value %>">
+        <%= chip.label %> <i class="bi bi-x ms-1"></i>
+      </button>
+    <% }) %>
+  </div>
 
   <div class="desktop-filter-panel mb-3">
     <div class="collapse" id="desktopFilterCollapse">
@@ -135,19 +150,24 @@
         <div class="fw-semibold mb-2"><i class="bi bi-funnel me-1"></i>詳細フィルタ</div>
         <div class="d-flex flex-wrap gap-3">
           <select id="statusFilter" class="form-select" multiple size="4" style="min-width:180px;">
-            <% statuses.forEach(s => { %><option value="<%= s.name %>"><%= s.name %></option><% }) %>
+            <% statuses.forEach((s) => { %>
+              <option value="<%= s.name %>" <%= filters.statuses.includes(s.name) ? 'selected' : '' %>><%= s.name %></option>
+            <% }) %>
           </select>
           <select id="categoryFilter" class="form-select" multiple size="4" style="min-width:180px;">
-            <% categories.forEach(c => { %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
+            <% categories.forEach((c) => { %>
+              <option value="<%= c.name %>" <%= filters.categories.includes(c.name) ? 'selected' : '' %>><%= c.name %></option>
+            <% }) %>
           </select>
           <select id="tagFilter" class="form-select" multiple size="4" style="min-width:180px;">
-            <% tags.forEach(t => { %><option value="<%= t.name %>"><%= t.name %></option><% }) %>
+            <% tags.forEach((t) => { %>
+              <option value="<%= t.name %>" <%= filters.tags.includes(t.name) ? 'selected' : '' %>><%= t.name %></option>
+            <% }) %>
           </select>
         </div>
       </div>
     </div>
   </div>
-
 
   <div class="mobile-filter-panel mb-3">
     <div class="accordion" id="filterAccordion">
@@ -160,13 +180,19 @@
         <div id="filterCollapse" class="accordion-collapse collapse" aria-labelledby="filterHeading" data-bs-parent="#filterAccordion">
           <div class="accordion-body d-flex flex-wrap gap-2">
             <select id="statusFilterMobile" class="form-select" multiple size="4">
-              <% statuses.forEach(s => { %><option value="<%= s.name %>"><%= s.name %></option><% }) %>
+              <% statuses.forEach((s) => { %>
+                <option value="<%= s.name %>" <%= filters.statuses.includes(s.name) ? 'selected' : '' %>><%= s.name %></option>
+              <% }) %>
             </select>
             <select id="categoryFilterMobile" class="form-select" multiple size="4">
-              <% categories.forEach(c => { %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
+              <% categories.forEach((c) => { %>
+                <option value="<%= c.name %>" <%= filters.categories.includes(c.name) ? 'selected' : '' %>><%= c.name %></option>
+              <% }) %>
             </select>
             <select id="tagFilterMobile" class="form-select" multiple size="4">
-              <% tags.forEach(t => { %><option value="<%= t.name %>"><%= t.name %></option><% }) %>
+              <% tags.forEach((t) => { %>
+                <option value="<%= t.name %>" <%= filters.tags.includes(t.name) ? 'selected' : '' %>><%= t.name %></option>
+              <% }) %>
             </select>
           </div>
         </div>
@@ -177,16 +203,16 @@
 
 <div class="content-area">
   <ul class="nav nav-tabs mb-4" id="statusTabs">
-    <li class="nav-item"><a class="nav-link active" href="#" data-tab="incidents"><i class="bi bi-exclamation-circle me-1"></i>障害情報</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" data-tab="maintenance"><i class="bi bi-tools me-1"></i>メンテナンス情報</a></li>
+    <li class="nav-item"><a class="nav-link <%= filters.tab === 'incidents' ? 'active' : '' %>" href="#" data-tab="incidents"><i class="bi bi-exclamation-circle me-1"></i>障害情報</a></li>
+    <li class="nav-item"><a class="nav-link <%= filters.tab === 'maintenance' ? 'active' : '' %>" href="#" data-tab="maintenance"><i class="bi bi-tools me-1"></i>メンテナンス情報</a></li>
   </ul>
 
-  <div id="tab-incidents" class="tab-content active">
+  <div id="tab-incidents" class="tab-content <%= filters.tab === 'incidents' ? 'active' : '' %>">
     <% if (incidents.length === 0) { %>
-      <div class="alert alert-secondary text-center">現在、報告されている障害はありません。</div>
+      <div class="alert alert-secondary text-center">条件に一致する障害情報はありません。</div>
     <% } %>
-    <% incidents.forEach(incident => { %>
-      <div class="incident-card" data-type="incident" data-title="<%= incident.title %>" data-category="<%= incident.category %>" data-status="<%= incident.status %>" data-tags="<%= incident.tags.join(' ') %>">
+    <% incidents.forEach((incident) => { %>
+      <div class="incident-card">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h4 class="mb-0"><i class="bi bi-exclamation-circle me-2 text-danger"></i><%= incident.title %></h4>
           <span class="badge status-badge" style="background-color:<%= incident.status_color %>;color:<%= incident.status_text_color %>"><%= incident.status %></span>
@@ -195,7 +221,7 @@
           管理番号: <strong><%= incident.code %></strong> | 分類: <%= incident.category %> | 発生: <%= incident.start_at_fmt %><% if (incident.end_at_fmt) { %> | 復旧: <%= incident.end_at_fmt %><% } %>
         </div>
         <div class="mb-2">
-          <% incident.tags.forEach(tag => { %><span class="badge bg-secondary me-1"><%= tag %></span><% }) %>
+          <% incident.tags.forEach((tag) => { %><span class="badge bg-secondary me-1"><%= tag %></span><% }) %>
         </div>
         <div class="truncate"><%- incident.info_html %></div>
         <button
@@ -206,14 +232,22 @@
         >詳細を表示</button>
       </div>
     <% }) %>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <div class="pager-summary">全 <%= pagination.incidents.totalCount %> 件 / <%= pagination.incidents.page %> / <%= pagination.incidents.totalPages %> ページ</div>
+      <div class="btn-group">
+        <a class="btn btn-sm btn-outline-secondary <%= pagination.incidents.page <= 1 ? 'disabled' : '' %>" href="<%= queryFor({ tab: 'incidents', incPage: Math.max(1, pagination.incidents.page - 1) }) %>">前へ</a>
+        <a class="btn btn-sm btn-outline-secondary <%= pagination.incidents.page >= pagination.incidents.totalPages ? 'disabled' : '' %>" href="<%= queryFor({ tab: 'incidents', incPage: Math.min(pagination.incidents.totalPages, pagination.incidents.page + 1) }) %>">次へ</a>
+      </div>
+    </div>
   </div>
 
-  <div id="tab-maintenance" class="tab-content">
+  <div id="tab-maintenance" class="tab-content <%= filters.tab === 'maintenance' ? 'active' : '' %>">
     <% if (maintenance.length === 0) { %>
-      <div class="alert alert-secondary text-center">現在、予定されているメンテナンスはありません。</div>
+      <div class="alert alert-secondary text-center">条件に一致するメンテナンス情報はありません。</div>
     <% } %>
-    <% maintenance.forEach(item => { %>
-      <div class="maint-card" data-type="maintenance" data-title="<%= item.title %>" data-category="<%= item.category %>" data-status="<%= item.status %>" data-tags="<%= item.tags.join(' ') %>">
+    <% maintenance.forEach((item) => { %>
+      <div class="maint-card">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h4 class="mb-0"><i class="bi bi-tools me-2 text-info"></i><%= item.title %></h4>
           <span class="badge status-badge" style="background-color:<%= item.status_color %>;color:<%= item.status_text_color %>"><%= item.status %></span>
@@ -222,7 +256,7 @@
           管理番号: <strong><%= item.code || ('MTN-ID-' + item.id) %></strong> | 分類: <%= item.category %> | 期間: <%= item.start_time_fmt %> ～ <%= item.end_time_fmt || '未定' %>
         </div>
         <div class="mb-2">
-          <% item.tags.forEach(tag => { %><span class="badge bg-secondary me-1"><%= tag %></span><% }) %>
+          <% item.tags.forEach((tag) => { %><span class="badge bg-secondary me-1"><%= tag %></span><% }) %>
         </div>
         <div class="truncate"><%- item.info_html %></div>
         <button
@@ -233,6 +267,14 @@
         >詳細を表示</button>
       </div>
     <% }) %>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <div class="pager-summary">全 <%= pagination.maintenance.totalCount %> 件 / <%= pagination.maintenance.page %> / <%= pagination.maintenance.totalPages %> ページ</div>
+      <div class="btn-group">
+        <a class="btn btn-sm btn-outline-secondary <%= pagination.maintenance.page <= 1 ? 'disabled' : '' %>" href="<%= queryFor({ tab: 'maintenance', mtPage: Math.max(1, pagination.maintenance.page - 1) }) %>">前へ</a>
+        <a class="btn btn-sm btn-outline-secondary <%= pagination.maintenance.page >= pagination.maintenance.totalPages ? 'disabled' : '' %>" href="<%= queryFor({ tab: 'maintenance', mtPage: Math.min(pagination.maintenance.totalPages, pagination.maintenance.page + 1) }) %>">次へ</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -256,7 +298,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 let refreshTimer = null;
-let lastRefreshFailed = false;
+let activeTab = '<%= filters.tab %>';
 
 const htmlEl = document.documentElement;
 const themeToggleBtn = document.getElementById('themeToggle');
@@ -277,23 +319,23 @@ function showToast(message, type='success', withRetry=false){
   container.appendChild(toastEl);
   const toast = new bootstrap.Toast(toastEl, { delay: withRetry ? 6000 : 2500 });
   toast.show();
-
   const retryBtn = toastEl.querySelector('.retry-refresh');
   if (retryBtn) retryBtn.addEventListener('click', () => fetchLatestData(true));
-
   toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
 function selectedValues(id){
   const el = document.getElementById(id);
   if (!el) return [];
-  return Array.from(el.selectedOptions).map(o => o.value);
+  return Array.from(el.selectedOptions).map((o) => o.value);
 }
 
 function setSelectedValues(id, values){
   const el = document.getElementById(id);
   if (!el) return;
-  Array.from(el.options).forEach(opt => { opt.selected = values.includes(opt.value); });
+  Array.from(el.options).forEach((opt) => {
+    opt.selected = values.includes(opt.value);
+  });
 }
 
 function syncDesktopAndMobile(source){
@@ -309,104 +351,92 @@ function syncDesktopAndMobile(source){
   });
 }
 
-function currentFilters(){
-  const useMobile = window.matchMedia('(max-width: 768px)').matches;
-  const statusId = useMobile ? 'statusFilterMobile' : 'statusFilter';
-  const categoryId = useMobile ? 'categoryFilterMobile' : 'categoryFilter';
-  const tagId = useMobile ? 'tagFilterMobile' : 'tagFilter';
-
-  return {
-    query: document.getElementById('searchInput').value.toLowerCase(),
-    statuses: selectedValues(statusId),
-    categories: selectedValues(categoryId),
-    tags: selectedValues(tagId),
-  };
+function setActiveTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.nav-link').forEach((el) => el.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach((el) => el.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
 }
 
-function renderFilterChips(filters){
-  const active = document.getElementById('activeFilters');
-  if (!active) return;
-  active.innerHTML = '';
-
-  const chips = [];
-  if (filters.query) chips.push({ type: 'query', value: filters.query, label: `キーワード: ${filters.query}` });
-  filters.statuses.forEach(v => chips.push({ type: 'status', value: v, label: `ステータス: ${v}` }));
-  filters.categories.forEach(v => chips.push({ type: 'category', value: v, label: `分類: ${v}` }));
-  filters.tags.forEach(v => chips.push({ type: 'tag', value: v, label: `タグ: ${v}` }));
-
-  chips.forEach(chip => {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-sm btn-outline-secondary rounded-pill filter-chip';
-    btn.dataset.type = chip.type;
-    btn.dataset.value = chip.value;
-    btn.innerHTML = `${chip.label} <i class="bi bi-x ms-1"></i>`;
-    active.appendChild(btn);
-  });
-
-  active.style.display = chips.length > 0 ? 'flex' : 'none';
+function buildSearchParams() {
+  const params = new URLSearchParams();
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) params.set('q', q);
+  selectedValues('statusFilter').forEach((v) => params.append('statuses', v));
+  selectedValues('categoryFilter').forEach((v) => params.append('categories', v));
+  selectedValues('tagFilter').forEach((v) => params.append('tags', v));
+  params.set('tab', activeTab);
+  params.set('inc_page', '1');
+  params.set('mt_page', '1');
+  params.set('page_size', document.getElementById('pageSizeSelect').value);
+  return params;
 }
 
-function applyFilters(){
-  const filters = currentFilters();
-
-  document.querySelectorAll('.incident-card, .maint-card').forEach(card => {
-    const text = `${card.dataset.title} ${card.dataset.category} ${card.dataset.tags}`.toLowerCase();
-    const cardStatus = card.dataset.status;
-
-    const matchText = text.includes(filters.query);
-    const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(cardStatus);
-    const matchCategory = filters.categories.length === 0 || filters.categories.includes(card.dataset.category);
-    const matchTag = filters.tags.length === 0 || filters.tags.some(t => card.dataset.tags.includes(t));
-
-    card.style.display = (matchText && matchStatus && matchCategory && matchTag) ? '' : 'none';
-  });
-
-  renderFilterChips(filters);
+function navigateWithCurrentFilters() {
+  window.location.href = `/?${buildSearchParams().toString()}`;
 }
 
-['searchInput','statusFilter','categoryFilter','tagFilter','statusFilterMobile','categoryFilterMobile','tagFilterMobile'].forEach(id => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.addEventListener('input', () => {
-    if (id.includes('Mobile')) syncDesktopAndMobile('mobile');
-    else if (id !== 'searchInput') syncDesktopAndMobile('desktop');
-    applyFilters();
-  });
-  el.addEventListener('change', () => {
-    if (id.includes('Mobile')) syncDesktopAndMobile('mobile');
-    else if (id !== 'searchInput') syncDesktopAndMobile('desktop');
-    applyFilters();
-  });
+document.getElementById('applyFiltersBtn').addEventListener('click', () => {
+  syncDesktopAndMobile('desktop');
+  navigateWithCurrentFilters();
 });
 
-const activeFiltersEl = document.getElementById('activeFilters');
-if (activeFiltersEl) activeFiltersEl.addEventListener('click', (e) => {
-  const chip = e.target.closest('.filter-chip');
-  if (!chip) return;
-
-  if (chip.dataset.type === 'query') {
-    document.getElementById('searchInput').value = '';
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    syncDesktopAndMobile('desktop');
+    navigateWithCurrentFilters();
   }
+});
 
-  const mapping = {
-    status: ['statusFilter', 'statusFilterMobile'],
-    category: ['categoryFilter', 'categoryFilterMobile'],
-    tag: ['tagFilter', 'tagFilterMobile'],
-  };
+document.getElementById('pageSizeSelect').addEventListener('change', () => {
+  syncDesktopAndMobile('desktop');
+  navigateWithCurrentFilters();
+});
 
-  const targetIds = mapping[chip.dataset.type] || [];
-  targetIds.forEach(id => {
-    const values = selectedValues(id).filter(v => v !== chip.dataset.value);
-    setSelectedValues(id, values);
-  });
-
-  applyFilters();
+['statusFilterMobile', 'categoryFilterMobile', 'tagFilterMobile'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('change', () => syncDesktopAndMobile('mobile'));
 });
 
 document.getElementById('clearFilters').addEventListener('click', () => {
-  document.getElementById('searchInput').value = '';
-  ['statusFilter','categoryFilter','tagFilter','statusFilterMobile','categoryFilterMobile','tagFilterMobile'].forEach(id => setSelectedValues(id, []));
-  applyFilters();
+  const params = new URLSearchParams();
+  params.set('tab', activeTab);
+  params.set('inc_page', '1');
+  params.set('mt_page', '1');
+  params.set('page_size', document.getElementById('pageSizeSelect').value);
+  window.location.href = `/?${params.toString()}`;
+});
+
+document.getElementById('activeFilters').addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+
+  if (chip.dataset.type === 'q') {
+    document.getElementById('searchInput').value = '';
+  }
+  if (chip.dataset.type === 'statuses') {
+    ['statusFilter', 'statusFilterMobile'].forEach((id) => {
+      const values = selectedValues(id).filter((v) => v !== chip.dataset.value);
+      setSelectedValues(id, values);
+    });
+  }
+  if (chip.dataset.type === 'categories') {
+    ['categoryFilter', 'categoryFilterMobile'].forEach((id) => {
+      const values = selectedValues(id).filter((v) => v !== chip.dataset.value);
+      setSelectedValues(id, values);
+    });
+  }
+  if (chip.dataset.type === 'tags') {
+    ['tagFilter', 'tagFilterMobile'].forEach((id) => {
+      const values = selectedValues(id).filter((v) => v !== chip.dataset.value);
+      setSelectedValues(id, values);
+    });
+  }
+  syncDesktopAndMobile('desktop');
+  navigateWithCurrentFilters();
 });
 
 const desktopFilterCollapse = document.getElementById('desktopFilterCollapse');
@@ -424,20 +454,16 @@ function syncDesktopFilterToggleLabel() {
     desktopFilterToggle.classList.add('btn-outline-secondary');
   }
 }
-
 if (desktopFilterCollapse && desktopFilterToggle) {
   desktopFilterCollapse.addEventListener('shown.bs.collapse', syncDesktopFilterToggleLabel);
   desktopFilterCollapse.addEventListener('hidden.bs.collapse', syncDesktopFilterToggleLabel);
   desktopFilterToggle.addEventListener('click', () => setTimeout(syncDesktopFilterToggleLabel, 0));
 }
 
-document.querySelectorAll('[data-tab]').forEach(tab => {
-  tab.addEventListener('click', e => {
+document.querySelectorAll('[data-tab]').forEach((tab) => {
+  tab.addEventListener('click', (e) => {
     e.preventDefault();
-    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+    setActiveTab(tab.dataset.tab);
   });
 });
 
@@ -454,7 +480,7 @@ document.addEventListener('click', (e) => {
   showDetails(button.dataset.title || '', button.dataset.html || '', button.dataset.meta || '');
 });
 
-function setAutoRefresh(){
+function setAutoRefresh() {
   const interval = parseInt(document.getElementById('refreshInterval').value, 10);
   if (refreshTimer) clearInterval(refreshTimer);
   if (interval > 0) refreshTimer = setInterval(fetchLatestData, interval);
@@ -462,41 +488,27 @@ function setAutoRefresh(){
 document.getElementById('refreshInterval').addEventListener('change', setAutoRefresh);
 document.getElementById('manualRefresh').addEventListener('click', () => fetchLatestData(true));
 
-async function fetchLatestData(manual = false){
+async function fetchLatestData(manual = false) {
   try {
-    const filters = currentFilters();
-    const currentTab = document.querySelector('.nav-link.active')?.dataset.tab || 'incidents';
-
     const res = await fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const html = await res.text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
-
     document.getElementById('tab-incidents').innerHTML = doc.getElementById('tab-incidents').innerHTML;
     document.getElementById('tab-maintenance').innerHTML = doc.getElementById('tab-maintenance').innerHTML;
     document.getElementById('lastUpdated').innerText = doc.getElementById('lastUpdated').innerText;
-
-    document.getElementById('searchInput').value = filters.query;
-    ['statusFilter','statusFilterMobile'].forEach(id => setSelectedValues(id, filters.statuses));
-    ['categoryFilter','categoryFilterMobile'].forEach(id => setSelectedValues(id, filters.categories));
-    ['tagFilter','tagFilterMobile'].forEach(id => setSelectedValues(id, filters.tags));
-
-    document.querySelector(`[data-tab="${currentTab}"]`)?.click();
-    applyFilters();
-
-    lastRefreshFailed = false;
+    setActiveTab(activeTab);
     const t = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     showToast(manual ? `最新データを取得しました（${t}）` : `自動更新完了（${t}）`, 'success');
   } catch (e) {
     console.error(e);
-    lastRefreshFailed = true;
     showToast('データ更新に失敗しました。', 'danger', true);
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   const hash = window.location.hash;
-  if (hash === '#maintenance') document.querySelector('[data-tab="maintenance"]')?.click();
-  applyFilters();
+  if (hash === '#maintenance') setActiveTab('maintenance');
+  else setActiveTab(activeTab);
   setAutoRefresh();
   syncDesktopFilterToggleLabel();
 });
