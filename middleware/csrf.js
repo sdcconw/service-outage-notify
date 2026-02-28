@@ -1,3 +1,4 @@
+// CSRF token issuance and verification using cookie + request token matching.
 const crypto = require('crypto');
 
 const cookieSecure = process.env.COOKIE_SECURE

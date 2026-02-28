@@ -1,3 +1,4 @@
+// Status color helpers: normalize configured values and resolve safe UI colors.
 const BOOTSTRAP_STATUS_COLORS = {
   primary: '#0d6efd',
   secondary: '#6c757d',

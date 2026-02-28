@@ -1,3 +1,5 @@
+// Admin UI routes for incident/maintenance CRUD, tag linkage, and optional Discord notification.
+// These routes require admin auth and CSRF validation on POST.
 const express = require('express');
 const router = express.Router();
 const db = require('../models/db');

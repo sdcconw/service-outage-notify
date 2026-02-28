@@ -1,3 +1,5 @@
+// Shared management code generator used by Admin UI and API.
+// Output format is PREFIX + YYYYMMDDHHMM + 3-digit daily sequence.
 const db = require('./db');
 
 const TABLES = {

@@ -1,3 +1,5 @@
+// Public-facing status page routes: list/filter incidents and maintenance.
+// Markdown content is sanitized before rendering.
 const express = require('express');
 const router = express.Router();
 const db = require('../models/db');

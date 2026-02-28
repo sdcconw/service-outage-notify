@@ -1,3 +1,5 @@
+// Authenticated REST API for incident/maintenance CRUD and related tag linkage.
+// Includes input validation, audit logging, and optional Discord notifications.
 const express = require('express');
 const router = express.Router();
 const db = require('../models/db');

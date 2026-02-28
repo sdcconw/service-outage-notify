@@ -1,4 +1,4 @@
-
+// OpenAPI document builder and Swagger UI export for route annotations.
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
@@ -30,4 +30,3 @@ const options = {
 
 const specs = swaggerJsdoc(options);
 module.exports = { swaggerUi, specs };
-

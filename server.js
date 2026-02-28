@@ -1,3 +1,5 @@
+// Application entry point: wires middleware, auth/login, view routes, and API routes.
+// Also validates required runtime environment variables before boot.
 const dotenv = require('dotenv');
 dotenv.config();
 

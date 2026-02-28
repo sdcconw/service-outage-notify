@@ -1,3 +1,4 @@
+// Simple in-memory rate limiter with configurable window, limit, and skip rules.
 function toBool(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
   return String(value).toLowerCase() === 'true';

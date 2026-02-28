@@ -1,3 +1,4 @@
+// Audit log writer for create/update/delete operations across admin and API routes.
 const db = require('./db');
 
 function safeStringify(value) {

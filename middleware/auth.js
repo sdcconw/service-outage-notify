@@ -1,3 +1,4 @@
+// Auth middleware for Admin UI (JWT only) and API (API key or JWT).
 const jwt = require('jsonwebtoken');
 
 function extractBearerToken(req) {

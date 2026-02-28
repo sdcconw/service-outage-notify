@@ -1,3 +1,5 @@
+// Admin settings routes for category/status/tag master maintenance.
+// Delete actions block removal when any incident/maintenance references remain.
 const express = require('express');
 const router = express.Router();
 const db = require('../models/db');

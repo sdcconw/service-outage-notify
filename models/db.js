@@ -1,3 +1,5 @@
+// SQLite schema bootstrap and lightweight migrations run on service startup.
+// This module also creates indexes, FTS tables/triggers, and one-time backfills.
 const Database = require('better-sqlite3');
 const db = new Database('./db/database.db');
 
