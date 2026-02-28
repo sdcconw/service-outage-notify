@@ -4,6 +4,7 @@ const db = require('../models/db');
 const { JSDOM } = require('jsdom');
 const createDOMPurify = require('dompurify');
 const marked = require('marked');
+const { resolveStatusColor } = require('../models/statusColor');
 
 // DOMPurifyセットアップ
 const window = new JSDOM('').window;
@@ -14,23 +15,26 @@ function convertMarkdownToSafeHtml(mdText) {
   return DOMPurify.sanitize(dirty);
 }
 
-
-// タグ取得関数
-function getTagsForIncident(id) {
-  return db.prepare(`
-    SELECT t.name
-    FROM tags t
-    JOIN incident_tags it ON it.tag_id = t.id
-    WHERE it.incident_id = ?
-  `).all(id).map(t => t.name);
+function formatDateTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 16).replace('T', ' ');
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
-function getTagsForMaintenance(id) {
-  return db.prepare(`
-    SELECT t.name
-    FROM tags t
-    JOIN maintenance_tags mt ON mt.tag_id = t.id
-    WHERE mt.maintenance_id = ?
-  `).all(id).map(t => t.name);
+
+
+function buildTagMap(rows, idKey) {
+  const map = new Map();
+  rows.forEach((row) => {
+    if (!map.has(row[idKey])) map.set(row[idKey], []);
+    map.get(row[idKey]).push(row.name);
+  });
+  return map;
 }
 
 // 🔹 トップページ
@@ -38,37 +42,59 @@ router.get('/', (req, res) => {
   // 障害情報
   const incidentsRaw = db.prepare(`
     SELECT i.id, i.code, i.title, i.info_md, i.start_at, i.end_at,
-           c.name AS category, s.name AS status
+           c.name AS category, s.name AS status, s.color AS status_color
     FROM incidents i
     JOIN categories c ON i.category_id = c.id
     JOIN statuses s ON i.status_id = s.id
     WHERE i.is_hidden = 0
     ORDER BY i.created_at DESC
   `).all();
+  const incidentTagMap = buildTagMap(
+    db.prepare(`
+      SELECT it.incident_id, t.name
+      FROM incident_tags it
+      JOIN tags t ON t.id = it.tag_id
+    `).all(),
+    'incident_id'
+  );
 
   const incidents = incidentsRaw.map(i => ({
     ...i,
     info_html: convertMarkdownToSafeHtml(i.info_md),
-    tags: getTagsForIncident(i.id),
-    status_color: getStatusColor(i.status)
+    tags: incidentTagMap.get(i.id) || [],
+    status_color: resolveStatusColor(i.status_color).hex,
+    status_text_color: resolveStatusColor(i.status_color).textColor,
+    start_at_fmt: formatDateTime(i.start_at),
+    end_at_fmt: i.end_at ? formatDateTime(i.end_at) : '',
   }));
 
   // メンテナンス情報
   const maintenanceRaw = db.prepare(`
-    SELECT m.id, m.title, m.description AS info_md, m.start_time, m.end_time,
-           c.name AS category, s.name AS status
+    SELECT m.id, m.code, m.title, m.description AS info_md, m.start_time, m.end_time,
+           c.name AS category, s.name AS status, s.color AS status_color
     FROM maintenance_schedules m
     JOIN categories c ON m.category_id = c.id
     JOIN statuses s ON m.status_id = s.id
     WHERE IFNULL(m.is_hidden, 0) = 0
     ORDER BY m.created_at DESC
   `).all();
+  const maintenanceTagMap = buildTagMap(
+    db.prepare(`
+      SELECT mt.maintenance_id, t.name
+      FROM maintenance_tags mt
+      JOIN tags t ON t.id = mt.tag_id
+    `).all(),
+    'maintenance_id'
+  );
 
   const maintenance = maintenanceRaw.map(m => ({
     ...m,
     info_html: convertMarkdownToSafeHtml(m.info_md),
-    tags: getTagsForMaintenance(m.id),
-    status_color: getStatusColor(m.status)
+    tags: maintenanceTagMap.get(m.id) || [],
+    status_color: resolveStatusColor(m.status_color).hex,
+    status_text_color: resolveStatusColor(m.status_color).textColor,
+    start_time_fmt: formatDateTime(m.start_time),
+    end_time_fmt: m.end_time ? formatDateTime(m.end_time) : '',
   }));
 
   // 🔹 フィルタ用データ
@@ -76,32 +102,24 @@ router.get('/', (req, res) => {
   const categories = db.prepare(`SELECT name FROM categories ORDER BY id`).all();
   const tags = db.prepare(`SELECT name FROM tags ORDER BY id`).all();
 
-  res.render('index', { incidents, maintenance, statuses, categories, tags });
-});
+  const latestUpdated = db.prepare(`
+    SELECT MAX(ts) AS latest
+    FROM (
+      SELECT MAX(created_at) AS ts FROM incidents WHERE is_hidden = 0
+      UNION ALL
+      SELECT MAX(created_at) AS ts FROM maintenance_schedules WHERE IFNULL(is_hidden, 0) = 0
+    )
+  `).get().latest;
 
-// ステータス色
-function getStatusColor(status) {
-  switch (status) {
-    case '回復済':
-      return 'bg-success text-light'; // 緑：正常に戻った
-    case '完了':
-      return 'bg-primary text-light'; // 青：処理完了
-    case '対応中':
-      return 'bg-warning text-dark'; // 黄：進行中
-    case '進行中':
-      return 'bg-info text-dark'; // 水色：進行系でも軽め
-    case '確認中':
-      return 'bg-danger text-light'; // 赤：要確認
-    case '予定':
-      return 'bg-info text-dark'; // 水色：スケジュール予定
-    case '計画':
-      return 'bg-secondary text-light'; // グレー：まだ未実施
-    case '緊急':
-      return 'bg-danger text-light'; // 赤：最優先
-    default:
-      return 'bg-dark text-light'; // 黒：分類不能
-  }
-}
+  res.render('index', {
+    incidents,
+    maintenance,
+    statuses,
+    categories,
+    tags,
+    lastUpdatedAt: latestUpdated ? formatDateTime(latestUpdated) : '-',
+  });
+});
 
 
 module.exports = router;

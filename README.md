@@ -86,7 +86,7 @@ npm start
 
 以下のいずれかで認証できます。
 
-- `x-api-key: <API_KEY>` ヘッダー（または `?api_key=` クエリ）
+- `x-api-key: <API_KEY>` ヘッダー
 - `Authorization: Bearer <JWT>`
 
 ## API エンドポイント（実装済み）

@@ -2,26 +2,24 @@
   "name": "incident-notifier",
   "version": "1.0.0",
   "main": "server.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "bcrypt": "latest",
-    "better-sqlite3": "latest",
-    "cookie-parser": "latest",
-    "dompurify": "latest",
-    "dotenv": "latest",
-    "ejs": "latest",
-    "express": "latest",
-    "express-ejs-layouts": "latest",
-    "express-session": "latest",
-    "express-validator": "latest",
-    "helmet": "latest",
-    "jsonwebtoken": "latest",
-    "jsdom": "latest",
-    "marked": "latest",
-    "node-fetch": "latest",
-    "swagger-jsdoc": "latest",
-    "swagger-ui-express": "latest"
+    "better-sqlite3": "^12.6.2",
+    "cookie-parser": "^1.4.7",
+    "dompurify": "^3.3.1",
+    "dotenv": "^17.3.1",
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.1",
+    "jsonwebtoken": "^9.0.3",
+    "jsdom": "^28.1.0",
+    "marked": "^17.0.3",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }

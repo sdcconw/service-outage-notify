@@ -1,30 +1,46 @@
-// middleware/auth.js
 const jwt = require('jsonwebtoken');
 
-module.exports = function (req, res, next) {
-  // --- 1️⃣ APIキー認証チェック ---
+function extractBearerToken(req) {
+  return req.header('Authorization')?.replace('Bearer ', '');
+}
+
+function verifyJwt(token) {
+  return jwt.verify(token, process.env.JWT_SECRET);
+}
+
+function requireAdminAuth(req, res, next) {
+  const token = req.cookies.token || extractBearerToken(req);
+  if (!token) return res.status(401).send('Unauthorized');
+
+  try {
+    req.user = verifyJwt(token);
+    return next();
+  } catch (err) {
+    return res.status(403).send('Forbidden');
+  }
+}
+
+function requireApiAuth(req, res, next) {
   const apiKey = process.env.API_KEY;
   const headerApiKey = req.header('x-api-key');
-  const queryApiKey = req.query.api_key;
 
-  if (apiKey && (headerApiKey === apiKey || queryApiKey === apiKey)) {
-    // APIキー一致 → 認証成功（ユーザー情報は空のシステムアカウント扱い）
+  if (apiKey && headerApiKey === apiKey) {
     req.user = { role: 'system', method: 'api_key' };
     return next();
   }
 
-  // --- 2️⃣ JWTトークン（Cookie or Authorizationヘッダー）チェック ---
-  const token =
-    req.cookies.token ||
-    req.header('Authorization')?.replace('Bearer ', '');
-
+  const token = req.cookies.token || extractBearerToken(req);
   if (!token) return res.status(401).send('Unauthorized');
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
+    req.user = verifyJwt(token);
+    return next();
   } catch (err) {
     return res.status(403).send('Forbidden');
   }
+}
+
+module.exports = {
+  requireAdminAuth,
+  requireApiAuth,
 };

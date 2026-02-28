@@ -5,10 +5,12 @@ docker build ./ -t soi01
 docker run -d \
   --name soi01 \
   --restart unless-stopped \
-  -p 3001:3000 \
+  -p 3002:3000 \
   -v $(pwd)/db:/app/db/ \
   soi01
 
 
 #restart
 docker stop soi01 && docker rm soi01 && docker build ./ -t soi01 --no-cache
+
+docker run -d --name soi01 --restart unless-stopped -p 3002:3000 -v $(pwd)/db:/app/db/ soi01

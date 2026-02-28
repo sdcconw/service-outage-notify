@@ -7,8 +7,8 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body { padding-top: 70px; }
-    th.sortable { cursor: pointer; user-select: none; }
-    th.sortable span { margin-left: 6px; color: #666; }
+    .required-label::after { content: '必須'; color: #fff; background:#dc3545; border-radius: .25rem; font-size: .7rem; padding: .05rem .35rem; margin-left: .4rem; }
+    .optional-label::after { content: '任意'; color: #495057; background:#e9ecef; border-radius: .25rem; font-size: .7rem; padding: .05rem .35rem; margin-left: .4rem; }
   </style>
 </head>
 <body>
@@ -29,7 +29,8 @@
 
 <div class="container my-4">
   <h2>新規登録 / 編集</h2>
-  <form id="incidentForm" method="POST" action="/admin/incidents/add">
+  <form id="incidentForm" method="POST" action="/admin/incidents/add<%= listState.queryString %>" class="needs-validation" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <input type="hidden" name="id" id="incidentId" />
     <div id="editNotice" class="alert alert-warning d-none">
       編集中: <span id="editingCode"></span>
@@ -37,49 +38,61 @@
     </div>
 
     <div class="mb-3">
-      <label class="form-label" for="titleInput">案件名</label>
+      <label class="form-label required-label" for="titleInput">案件名</label>
       <input id="titleInput" type="text" name="title" class="form-control" required />
+      <div class="invalid-feedback">案件名を入力してください。</div>
     </div>
+
     <div class="mb-3">
-      <label class="form-label" for="categorySelect">カテゴリ</label>
-      <select id="categorySelect" name="category_id" class="form-select">
+      <label class="form-label required-label" for="categorySelect">カテゴリ</label>
+      <select id="categorySelect" name="category_id" class="form-select" required>
         <% categories.forEach(cat => { %>
           <option value="<%= cat.id %>"><%= cat.name %></option>
         <% }) %>
       </select>
+      <div class="invalid-feedback">カテゴリを選択してください。</div>
     </div>
+
     <div class="mb-3">
-      <label class="form-label" for="statusSelect">ステータス</label>
-      <select id="statusSelect" name="status_id" class="form-select">
+      <label class="form-label required-label" for="statusSelect">ステータス</label>
+      <select id="statusSelect" name="status_id" class="form-select" required>
         <% statuses.forEach(stat => { %>
           <option value="<%= stat.id %>"><%= stat.name %></option>
         <% }) %>
       </select>
+      <div class="invalid-feedback">ステータスを選択してください。</div>
     </div>
+
     <div class="mb-3">
-      <label class="form-label" for="infoTextarea">提供情報（Markdown）</label>
+      <label class="form-label optional-label" for="infoTextarea">提供情報（Markdown）</label>
       <textarea id="infoTextarea" name="info_md" class="form-control" rows="4" oninput="updatePreview(this.value)"></textarea>
     </div>
+
     <div class="mb-3">
-      <label class="form-label" for="startAtInput">開始日時</label>
+      <label class="form-label required-label" for="startAtInput">開始日時</label>
       <input id="startAtInput" type="datetime-local" name="start_at" class="form-control" required />
+      <div class="invalid-feedback">開始日時を入力してください。</div>
     </div>
+
     <div class="mb-3">
-      <label class="form-label" for="endAtInput">終了日時（継続中の場合は空欄）</label>
+      <label class="form-label optional-label" for="endAtInput">終了日時</label>
       <input id="endAtInput" type="datetime-local" name="end_at" class="form-control" />
     </div>
+
     <div class="mb-3">
       <label class="form-label">プレビュー</label>
       <div id="preview" class="p-2 border bg-light"></div>
     </div>
+
     <div class="mb-3">
-      <label class="form-label" for="tagsSelect">タグ</label>
+      <label class="form-label optional-label" for="tagsSelect">タグ</label>
       <select id="tagsSelect" name="tags" class="form-select" multiple>
         <% tags.forEach(tag => { %>
           <option value="<%= tag.id %>"><%= tag.name %></option>
         <% }) %>
       </select>
     </div>
+
     <div class="d-flex align-items-center gap-3">
       <button type="submit" class="btn btn-primary">保存</button>
       <div class="form-check mb-0">
@@ -90,16 +103,28 @@
   </form>
 
   <hr />
-  <h2>障害一覧</h2>
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="mb-0">障害一覧</h2>
+    <div class="d-flex align-items-center gap-2">
+      <label for="pageSizeSelect" class="small mb-0">表示件数</label>
+      <select id="pageSizeSelect" class="form-select form-select-sm w-auto">
+        <% [10,20,50,100].forEach(size => { %>
+          <option value="<%= size %>" <%= listState.pageSize === size ? 'selected' : '' %>><%= size %></option>
+        <% }) %>
+      </select>
+    </div>
+  </div>
+
   <table class="table table-bordered table-hover" id="incidentTable">
     <thead>
       <tr>
-        <th class="sortable" onclick="sortTable(0, this)">管理番号 <span></span></th>
-        <th class="sortable" onclick="sortTable(1, this)">カテゴリ <span></span></th>
-        <th class="sortable" onclick="sortTable(2, this)">案件名 <span></span></th>
-        <th class="sortable" onclick="sortTable(3, this)">ステータス <span></span></th>
-        <th class="sortable" onclick="sortTable(4, this)">タグ <span></span></th>
-        <th>日時</th>
+        <th><a href="#" class="sort-link" data-sort="code">管理番号</a></th>
+        <th><a href="#" class="sort-link" data-sort="category">カテゴリ</a></th>
+        <th><a href="#" class="sort-link" data-sort="title">案件名</a></th>
+        <th><a href="#" class="sort-link" data-sort="status">ステータス</a></th>
+        <th>タグ</th>
+        <th><a href="#" class="sort-link" data-sort="start_at">日時</a></th>
         <th>提供情報</th>
         <th>操作</th>
       </tr>
@@ -110,14 +135,14 @@
           <td><%= item.code %></td>
           <td><%= item.category %></td>
           <td><%= item.title %></td>
-          <td><span class="badge" style="background-color:<%= item.status_color %>;"><%= item.status %></span></td>
+          <td><span class="badge" style="background-color:<%= item.status_color %>;color:<%= item.status_text_color %>;"><%= item.status %></span></td>
           <td>
             <% item.tags.forEach(tag => { %>
               <span class="badge bg-secondary me-1"><%= tag %></span>
             <% }) %>
           </td>
-          <td><%= item.start_at %> ～ <%= item.end_at || '継続中' %></td>
-          <td><div><%= (item.info_md || '').slice(0, 300) %></div></td>
+          <td><%= item.start_at_fmt %> ～ <%= item.end_at_fmt || '継続中' %></td>
+          <td><div><%= (item.info_md || '').slice(0, 200) %></div></td>
           <td>
             <button
               class="btn btn-sm btn-outline-primary"
@@ -131,13 +156,13 @@
               data-incident-start="<%= item.start_at %>"
               data-incident-end="<%= item.end_at || '' %>"
               data-incident-tags="<%= (item.tag_ids || []).join(',') %>"
-            >
-              編集
-            </button>
-            <form method="POST" action="/admin/incidents/hide/<%= item.id %>" class="d-inline">
+            >編集</button>
+            <form method="POST" action="/admin/incidents/hide/<%= item.id %><%= listState.queryString %>" class="d-inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
               <button class="btn btn-sm btn-outline-warning"><%= item.is_hidden ? '表示' : '非表示' %></button>
             </form>
-            <form method="POST" action="/admin/incidents/delete/<%= item.id %>" class="d-inline" onsubmit="return confirm('削除してもよろしいですか？');">
+            <form method="POST" action="/admin/incidents/delete/<%= item.id %><%= listState.queryString %>" class="d-inline" onsubmit="return confirm('削除してもよろしいですか？');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
               <button class="btn btn-sm btn-outline-danger">削除</button>
             </form>
           </td>
@@ -145,100 +170,113 @@
       <% }) %>
     </tbody>
   </table>
+
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="small text-muted">全 <%= listState.totalCount %> 件 / <%= listState.page %> / <%= listState.totalPages %> ページ</div>
+    <div class="btn-group">
+      <a class="btn btn-sm btn-outline-secondary <%= listState.page <= 1 ? 'disabled' : '' %>" href="?page=<%= Math.max(1, listState.page - 1) %>&page_size=<%= listState.pageSize %>&sort=<%= listState.sort %>&order=<%= listState.order %>">前へ</a>
+      <a class="btn btn-sm btn-outline-secondary <%= listState.page >= listState.totalPages ? 'disabled' : '' %>" href="?page=<%= Math.min(listState.totalPages, listState.page + 1) %>&page_size=<%= listState.pageSize %>&sort=<%= listState.sort %>&order=<%= listState.order %>">次へ</a>
+    </div>
+  </div>
 </div>
 
 <script>
+const listState = {
+  page: <%= listState.page %>,
+  pageSize: <%= listState.pageSize %>,
+  sort: '<%= listState.sort %>',
+  order: '<%= listState.order %>',
+};
+const listQueryString = '<%= listState.queryString %>';
+
+function makeListQuery(next = {}) {
+  const params = new URLSearchParams({
+    page: String(next.page ?? listState.page),
+    page_size: String(next.pageSize ?? listState.pageSize),
+    sort: String(next.sort ?? listState.sort),
+    order: String(next.order ?? listState.order),
+  });
+  return `?${params.toString()}`;
+}
+
 const updatePreview = md => {
   try {
-    document.getElementById('preview').innerHTML = marked.parse(md);
+    document.getElementById('preview').innerHTML = marked.parse(md || '');
   } catch {
     document.getElementById('preview').innerHTML = '<div class="text-danger">プレビューエラー</div>';
   }
 };
 
 const editIncidentFromData = button => {
-  try {
-    const incident = {
-      id: button.dataset.incidentId,
-      code: button.dataset.incidentCode,
-      title: button.dataset.incidentTitle,
-      category_id: button.dataset.incidentCategory,
-      status_id: button.dataset.incidentStatus,
-      info_md: button.dataset.incidentInfo.replace(/&quot;/g, '"').replace(/\\n/g, '\n'),
-      start_at: button.dataset.incidentStart,
-      end_at: button.dataset.incidentEnd,
-      tag_ids: button.dataset.incidentTags ? button.dataset.incidentTags.split(',') : []
-    };
+  const incident = {
+    id: button.dataset.incidentId,
+    code: button.dataset.incidentCode,
+    title: button.dataset.incidentTitle,
+    category_id: button.dataset.incidentCategory,
+    status_id: button.dataset.incidentStatus,
+    info_md: button.dataset.incidentInfo.replace(/&quot;/g, '"').replace(/\\n/g, '\n'),
+    start_at: button.dataset.incidentStart,
+    end_at: button.dataset.incidentEnd,
+    tag_ids: button.dataset.incidentTags ? button.dataset.incidentTags.split(',').map(v => v.trim()).filter(Boolean) : []
+  };
 
-    document.getElementById('incidentId').value = incident.id;
-    document.getElementById('titleInput').value = incident.title;
-    document.getElementById('categorySelect').value = String(incident.category_id);
-    document.getElementById('statusSelect').value = String(incident.status_id);
-    document.getElementById('infoTextarea').value = incident.info_md || "";
-    document.getElementById('startAtInput').value = incident.start_at ? incident.start_at.slice(0,16) : '';
-    document.getElementById('endAtInput').value = incident.end_at ? incident.end_at.slice(0,16) : '';
+  document.getElementById('incidentId').value = incident.id;
+  document.getElementById('titleInput').value = incident.title;
+  document.getElementById('categorySelect').value = String(incident.category_id);
+  document.getElementById('statusSelect').value = String(incident.status_id);
+  document.getElementById('infoTextarea').value = incident.info_md || '';
+  document.getElementById('startAtInput').value = incident.start_at ? incident.start_at.slice(0,16) : '';
+  document.getElementById('endAtInput').value = incident.end_at ? incident.end_at.slice(0,16) : '';
 
-    const tagSelect = document.getElementById('tagsSelect');
-    const tagIds = incident.tag_ids.map(String);
-    Array.from(tagSelect.options).forEach(option => {
-      option.selected = tagIds.includes(option.value);
-    });
+  const tagSelect = document.getElementById('tagsSelect');
+  const tagIds = incident.tag_ids.map(String);
+  Array.from(tagSelect.options).forEach(option => {
+    option.selected = tagIds.includes(option.value);
+  });
 
-    updatePreview(incident.info_md || '');
+  updatePreview(incident.info_md || '');
 
-    const form = document.getElementById('incidentForm');
-    form.action = `/admin/incidents/edit/${incident.id}`;
+  const form = document.getElementById('incidentForm');
+  form.action = `/admin/incidents/edit/${incident.id}${listQueryString}`;
 
-    document.getElementById('editNotice').classList.remove('d-none');
-    document.getElementById('editingCode').innerText = incident.code || '';
-
-    // Discord通知チェックを編集時リセット
-    document.getElementById('discordNotify').checked = false;
-
-  } catch (error) {
-    console.error('編集データの読み込みエラー:', error);
-    alert('編集データの読み込みに失敗しました。');
-  }
+  document.getElementById('editNotice').classList.remove('d-none');
+  document.getElementById('editingCode').innerText = incident.code || '';
+  document.getElementById('discordNotify').checked = false;
 };
 
 const cancelEdit = () => {
   const form = document.getElementById('incidentForm');
   form.reset();
-  form.action = "/admin/incidents/add";
+  form.action = `/admin/incidents/add${listQueryString}`;
   document.getElementById('incidentId').value = '';
   document.getElementById('preview').innerHTML = '';
   document.getElementById('editNotice').classList.add('d-none');
-
-  // Discord通知チェックリセット
   document.getElementById('discordNotify').checked = false;
+  form.classList.remove('was-validated');
 };
 
-document.getElementById("incidentForm").addEventListener("submit", e => {
-  setTimeout(cancelEdit, 100);
+document.getElementById('incidentForm').addEventListener('submit', (e) => {
+  const form = e.currentTarget;
+  if (!form.checkValidity()) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  form.classList.add('was-validated');
 });
 
-let sortDir = true;
-let currentSortedTh = null;
-
-const sortTable = (colIndex, th) => {
-  const table = document.getElementById("incidentTable");
-  const rows = Array.from(table.tBodies[0].rows);
-
-  rows.sort((a, b) => {
-    const A = a.cells[colIndex].innerText.trim();
-    const B = b.cells[colIndex].innerText.trim();
-    return sortDir ? A.localeCompare(B) : B.localeCompare(A);
+document.querySelectorAll('.sort-link').forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    const sort = link.dataset.sort;
+    const order = (listState.sort === sort && listState.order === 'asc') ? 'desc' : 'asc';
+    window.location.href = makeListQuery({ page: 1, sort, order });
   });
+});
 
-  rows.forEach(row => table.tBodies[0].appendChild(row));
-
-  if (currentSortedTh && currentSortedTh !== th) {
-    currentSortedTh.querySelector("span").textContent = '';
-  }
-  th.querySelector("span").textContent = sortDir ? '▲' : '▼';
-  currentSortedTh = th;
-  sortDir = !sortDir;
-};
+document.getElementById('pageSizeSelect').addEventListener('change', (e) => {
+  const pageSize = Number(e.target.value);
+  window.location.href = makeListQuery({ page: 1, pageSize });
+});
 </script>
 
 </body>

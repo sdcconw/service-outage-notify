@@ -7,16 +7,25 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const db = require('./models/db');
+const { ensureCsrfToken, verifyCsrfToken } = require('./middleware/csrf');
+
+const trustProxy = Number(process.env.TRUST_PROXY || 1);
+const cookieSecure = process.env.COOKIE_SECURE
+  ? process.env.COOKIE_SECURE === 'true'
+  : true;
+const cookieSameSite = process.env.COOKIE_SAMESITE || 'lax';
 
 // view設定
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.set('trust proxy', trustProxy);
 
 // ミドルウェア設定
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(ensureCsrfToken);
 
 // ルーティング
 app.use('/', require('./routes/public'));
@@ -26,14 +35,18 @@ app.use('/api', require('./routes/api'));
 
 // ログイン処理
 app.get('/login', (req, res) => res.render('login'));
-app.post('/login', (req, res) => {
+app.post('/login', verifyCsrfToken, (req, res) => {
   const { username, password } = req.body;
   if (
     username === process.env.ADMIN_USER &&
     password === process.env.ADMIN_PASS
   ) {
     const token = jwt.sign({ user: username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.cookie('token', token, { httpOnly: true });
+    res.cookie('token', token, {
+      httpOnly: true,
+      sameSite: cookieSameSite,
+      secure: cookieSecure,
+    });
     res.redirect('/admin');
   } else {
     res.status(401).send('ログイン失敗');

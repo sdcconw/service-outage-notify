@@ -7,30 +7,24 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    body {
-      background-color: var(--bs-body-bg);
-      color: var(--bs-body-color);
-      transition: background-color .3s, color .3s;
-    }
-    h1 { font-size: 2.4rem; font-weight: 600; }
-    .badge { font-size: 0.85rem; }
+    body { background-color: var(--bs-body-bg); color: var(--bs-body-color); transition: background-color .3s, color .3s; }
+    h1 { font-size: 2rem; font-weight: 600; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-
     .incident-card, .maint-card {
       background: var(--bs-card-bg, #fff);
       border-radius: 1rem;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      transition: all .2s ease;
+      box-shadow: 0 2px 6px rgba(0,0,0,.1);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      border: 1px solid rgba(0,0,0,.05);
     }
-    [data-bs-theme="dark"] .incident-card, [data-bs-theme="dark"] .maint-card {
-      background: #1f1f1f;
-      box-shadow: 0 2px 8px rgba(255,255,255,0.05);
+    [data-bs-theme="dark"] .incident-card,
+    [data-bs-theme="dark"] .maint-card {
+      background: #1f2329;
+      border-color: #30363d;
+      box-shadow: 0 2px 8px rgba(0,0,0,.35);
     }
-    .incident-card:hover, .maint-card:hover { transform: scale(1.01); }
-
     .truncate {
       display: -webkit-box;
       -webkit-line-clamp: 3;
@@ -38,129 +32,151 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
-    .filter-box {
-      border: 1px solid #ccc;
-      border-radius: 1rem;
-      padding: 1rem;
-      background: var(--bs-body-bg);
-      margin-bottom: 1.5rem;
-      display: none;
+    .content-area { max-width: 1200px; margin: 0 auto; }
+    .filter-chip { cursor: pointer; }
+    #activeFilters { display: none; }
+    .status-badge { color: #fff; }
+    .meta-item { font-size: .9rem; color: var(--bs-secondary-color); }
+    .last-updated { font-size: .9rem; color: var(--bs-secondary-color); }
+    [data-bs-theme="dark"] .meta-item,
+    [data-bs-theme="dark"] .last-updated {
+      color: #b6c2cf;
     }
-
-    .filter-box select {
-      border-radius: 0.5rem;
+    [data-bs-theme="dark"] .truncate {
+      color: #e6edf3;
     }
-
-    .theme-toggle {
-      border: none;
-      background: transparent;
-      font-size: 1.3rem;
-      color: var(--bs-body-color);
-      transition: color .3s;
+    [data-bs-theme="dark"] .incident-card h4,
+    [data-bs-theme="dark"] .maint-card h4 {
+      color: #e6edf3;
     }
-
-    #toastContainer {
-      position: fixed;
-      bottom: 1rem;
-      right: 1rem;
-      z-index: 1055;
+    [data-bs-theme="dark"] .badge.bg-secondary {
+      background-color: #495057 !important;
+      color: #f8f9fa !important;
     }
-
-    .content-area {
-      max-width: 1200px;
-      margin: 0 auto;
+    [data-bs-theme="dark"] .desktop-filter-panel .border,
+    [data-bs-theme="dark"] .accordion-item {
+      border-color: #30363d !important;
+      background-color: #1f2329;
     }
-
-    .nav-tabs {
-      justify-content: center;
+    [data-bs-theme="dark"] .form-control,
+    [data-bs-theme="dark"] .form-select,
+    [data-bs-theme="dark"] .accordion-button {
+      background-color: #0f1720;
+      color: #e6edf3;
+      border-color: #30363d;
     }
-
-    /* フィルタボタン類を1行に固定 */
-    #filterToggle, #clearFilters {
-      white-space: nowrap;
+    [data-bs-theme="dark"] .accordion-button:not(.collapsed) {
+      background-color: #16202a;
+      color: #e6edf3;
     }
-
-    /* 現在のフィルタバーの見やすさ改善 */
-    #activeFilters {
-      background-color: var(--bs-light);
-      color: var(--bs-dark);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    [data-bs-theme="dark"] #activeFilters {
-      background-color: #1c2833;
-      border: 1px solid #2e4053;
-      color: #dbe9f9;
-    }
+    .search-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .search-input-wrap { flex: 1 1 560px; min-width: 240px; }
 
     @media (max-width: 768px) {
       .content-area { max-width: 95%; }
+      .desktop-filter-panel { display: none; }
+      #desktopFilterToggle { display: none; }
+      .mobile-filter-panel { display: block; }
+    }
+    @media (min-width: 769px) {
+      .desktop-filter-panel { display: block; }
+      .mobile-filter-panel { display: none; }
     }
   </style>
 </head>
 <body>
-
 <div class="container my-4">
-  <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 gap-3">
-    <h1 class="mb-0 flex-grow-1"><i class="bi bi-activity me-2"></i>SDCC ONWv3 稼働状況ポータル</h1>
-
-    <div class="d-flex align-items-center gap-3 flex-nowrap">
-      <div class="d-flex align-items-center gap-2 flex-nowrap">
-        <span><i class="bi bi-stopwatch me-1"></i> 自動更新:</span>
-        <select id="refreshInterval" class="form-select form-select-sm w-auto">
-          <option value="0">しない</option>
-          <option value="10000">10秒</option>
-          <option value="30000">30秒</option>
-          <option value="60000">1分</option>
-          <option value="300000" selected>5分</option>
-          <option value="1800000" selected>30分</option>
-        </select>
-        <button id="manualRefresh" class="btn btn-outline-primary btn-sm" title="今すぐ更新">
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
+  <div class="d-flex justify-content-between align-items-start flex-wrap mb-3 gap-3">
+    <div>
+      <h1 class="mb-1"><i class="bi bi-activity me-2"></i>SDCC ONWv3 稼働状況ポータル</h1>
+      <div class="last-updated">
+        <i class="bi bi-clock-history me-1"></i>
+        最終更新: <span id="lastUpdated"><%= lastUpdatedAt %></span>
       </div>
-      <button id="themeToggle" class="btn btn-outline-secondary btn-sm ms-2" title="ダークモード切替">
-        <i class="bi bi-moon-fill"></i>
-      </button>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <label for="refreshInterval" class="small mb-0">自動更新</label>
+      <select id="refreshInterval" class="form-select form-select-sm w-auto">
+        <option value="0">しない</option>
+        <option value="10000">10秒</option>
+        <option value="30000">30秒</option>
+        <option value="60000">1分</option>
+        <option value="300000" selected>5分</option>
+        <option value="1800000">30分</option>
+      </select>
+      <button id="manualRefresh" class="btn btn-outline-primary btn-sm" title="今すぐ更新"><i class="bi bi-arrow-clockwise"></i></button>
+      <button id="themeToggle" class="btn btn-outline-secondary btn-sm" title="ダークモード切替"><i class="bi bi-moon-fill"></i></button>
     </div>
   </div>
 
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
-    <div class="d-flex align-items-center gap-2 flex-grow-1 flex-nowrap">
+  <div class="search-toolbar mb-3">
+    <div class="search-input-wrap">
       <input id="searchInput" type="text" class="form-control" placeholder="キーワードで検索（案件名・カテゴリ・タグなど）">
-      <button id="filterToggle" class="btn btn-outline-secondary btn-sm flex-shrink-0">
-        <i class="bi bi-funnel"></i> フィルタを開く
-      </button>
-      <button id="clearFilters" class="btn btn-outline-danger btn-sm flex-shrink-0">
-        <i class="bi bi-x-circle"></i> フィルタ解除
-      </button>
+    </div>
+    <button
+      id="desktopFilterToggle"
+      class="btn btn-outline-secondary btn-sm"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#desktopFilterCollapse"
+      aria-expanded="false"
+      aria-controls="desktopFilterCollapse"
+    >
+      <i class="bi bi-funnel me-1"></i>フィルタを開く
+    </button>
+    <button id="clearFilters" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1"></i>フィルタ解除</button>
+  </div>
+  <div id="activeFilters" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+  <div class="desktop-filter-panel mb-3">
+    <div class="collapse" id="desktopFilterCollapse">
+      <div class="p-3 border rounded-4">
+        <div class="fw-semibold mb-2"><i class="bi bi-funnel me-1"></i>詳細フィルタ</div>
+        <div class="d-flex flex-wrap gap-3">
+          <select id="statusFilter" class="form-select" multiple size="4" style="min-width:180px;">
+            <% statuses.forEach(s => { %><option value="<%= s.name %>"><%= s.name %></option><% }) %>
+          </select>
+          <select id="categoryFilter" class="form-select" multiple size="4" style="min-width:180px;">
+            <% categories.forEach(c => { %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
+          </select>
+          <select id="tagFilter" class="form-select" multiple size="4" style="min-width:180px;">
+            <% tags.forEach(t => { %><option value="<%= t.name %>"><%= t.name %></option><% }) %>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- 現在のフィルタ内容表示 -->
-  <div id="activeFilters" class="alert alert-info py-2 px-3 small" style="display:none;"></div>
+
+  <div class="mobile-filter-panel mb-3">
+    <div class="accordion" id="filterAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="filterHeading">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
+            <i class="bi bi-funnel me-2"></i>詳細フィルタ
+          </button>
+        </h2>
+        <div id="filterCollapse" class="accordion-collapse collapse" aria-labelledby="filterHeading" data-bs-parent="#filterAccordion">
+          <div class="accordion-body d-flex flex-wrap gap-2">
+            <select id="statusFilterMobile" class="form-select" multiple size="4">
+              <% statuses.forEach(s => { %><option value="<%= s.name %>"><%= s.name %></option><% }) %>
+            </select>
+            <select id="categoryFilterMobile" class="form-select" multiple size="4">
+              <% categories.forEach(c => { %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
+            </select>
+            <select id="tagFilterMobile" class="form-select" multiple size="4">
+              <% tags.forEach(t => { %><option value="<%= t.name %>"><%= t.name %></option><% }) %>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- コンテンツ -->
 <div class="content-area">
-  <div class="filter-box" id="filterBox">
-    <h5 class="mb-3"><i class="bi bi-funnel me-2"></i>詳細フィルタ</h5>
-    <div class="d-flex flex-wrap gap-3">
-      <select id="statusFilter" class="form-select" multiple size="4" style="min-width:180px;">
-        <% statuses.forEach(s=>{ %><option value="<%= s.name %>"><%= s.name %></option><% }) %>
-      </select>
-      <select id="categoryFilter" class="form-select" multiple size="4" style="min-width:180px;">
-        <% categories.forEach(c=>{ %><option value="<%= c.name %>"><%= c.name %></option><% }) %>
-      </select>
-      <select id="tagFilter" class="form-select" multiple size="4" style="min-width:180px;">
-        <% tags.forEach(t=>{ %><option value="<%= t.name %>"><%= t.name %></option><% }) %>
-      </select>
-    </div>
-  </div>
-
-  <ul class="nav nav-tabs mb-4 justify-content-start" id="statusTabs">
+  <ul class="nav nav-tabs mb-4" id="statusTabs">
     <li class="nav-item"><a class="nav-link active" href="#" data-tab="incidents"><i class="bi bi-exclamation-circle me-1"></i>障害情報</a></li>
     <li class="nav-item"><a class="nav-link" href="#" data-tab="maintenance"><i class="bi bi-tools me-1"></i>メンテナンス情報</a></li>
   </ul>
@@ -170,20 +186,24 @@
       <div class="alert alert-secondary text-center">現在、報告されている障害はありません。</div>
     <% } %>
     <% incidents.forEach(incident => { %>
-      <div class="incident-card" data-title="<%= incident.title %>" data-category="<%= incident.category %>" data-tags="<%= incident.tags.join(' ') %>">
+      <div class="incident-card" data-type="incident" data-title="<%= incident.title %>" data-category="<%= incident.category %>" data-status="<%= incident.status %>" data-tags="<%= incident.tags.join(' ') %>">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h4><i class="bi bi-exclamation-circle me-2 text-danger"></i><%= incident.title %></h4>
-          <span class="badge <%= incident.status_color %>"><%= incident.status %></span>
+          <h4 class="mb-0"><i class="bi bi-exclamation-circle me-2 text-danger"></i><%= incident.title %></h4>
+          <span class="badge status-badge" style="background-color:<%= incident.status_color %>;color:<%= incident.status_text_color %>"><%= incident.status %></span>
         </div>
-        <div class="text-muted mb-2">
-          <i class="bi bi-hash me-1"></i>管理番号: <strong><%= incident.code %></strong> |
-          <i class="bi bi-folder2 me-1"></i><%= incident.category %>
+        <div class="meta-item mb-2">
+          管理番号: <strong><%= incident.code %></strong> | 分類: <%= incident.category %> | 発生: <%= incident.start_at_fmt %><% if (incident.end_at_fmt) { %> | 復旧: <%= incident.end_at_fmt %><% } %>
         </div>
         <div class="mb-2">
-          <%- incident.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join(' ') %>
+          <% incident.tags.forEach(tag => { %><span class="badge bg-secondary me-1"><%= tag %></span><% }) %>
         </div>
         <div class="truncate"><%- incident.info_html %></div>
-        <button class="btn btn-sm btn-outline-primary mt-2" onclick="showDetails('<%- incident.title %>', `<%- incident.info_html %>`)">詳細を表示</button>
+        <button
+          class="btn btn-sm btn-outline-primary mt-2 detail-btn"
+          data-title="<%= incident.title %>"
+          data-html="<%= incident.info_html %>"
+          data-meta="管理番号: <%= incident.code %> / 分類: <%= incident.category %>"
+        >詳細を表示</button>
       </div>
     <% }) %>
   </div>
@@ -193,20 +213,24 @@
       <div class="alert alert-secondary text-center">現在、予定されているメンテナンスはありません。</div>
     <% } %>
     <% maintenance.forEach(item => { %>
-      <div class="maint-card" data-title="<%= item.title %>" data-category="<%= item.category %>" data-tags="<%= item.tags.join(' ') %>">
+      <div class="maint-card" data-type="maintenance" data-title="<%= item.title %>" data-category="<%= item.category %>" data-status="<%= item.status %>" data-tags="<%= item.tags.join(' ') %>">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h4><i class="bi bi-tools me-2 text-info"></i><%= item.title %></h4>
-          <span class="badge <%= item.status_color %>"><%= item.status %></span>
+          <h4 class="mb-0"><i class="bi bi-tools me-2 text-info"></i><%= item.title %></h4>
+          <span class="badge status-badge" style="background-color:<%= item.status_color %>;color:<%= item.status_text_color %>"><%= item.status %></span>
         </div>
-        <div class="text-muted mb-2">
-          <i class="bi bi-calendar2-week me-1"></i><%= item.start_time %> ～ <%= item.end_time || "予定中" %>
-          | <i class="bi bi-folder2 me-1"></i><%= item.category %>
+        <div class="meta-item mb-2">
+          管理番号: <strong><%= item.code || ('MTN-ID-' + item.id) %></strong> | 分類: <%= item.category %> | 期間: <%= item.start_time_fmt %> ～ <%= item.end_time_fmt || '未定' %>
         </div>
         <div class="mb-2">
-          <%- item.tags.map(tag => `<span class="badge bg-secondary me-1">${tag}</span>`).join(' ') %>
+          <% item.tags.forEach(tag => { %><span class="badge bg-secondary me-1"><%= tag %></span><% }) %>
         </div>
         <div class="truncate"><%- item.info_html %></div>
-        <button class="btn btn-sm btn-outline-primary mt-2" onclick="showDetails('<%- item.title %>', `<%- item.info_html %>`)">詳細を表示</button>
+        <button
+          class="btn btn-sm btn-outline-primary mt-2 detail-btn"
+          data-title="<%= item.title %>"
+          data-html="<%= item.info_html %>"
+          data-meta="管理番号: <%= item.code || ('MTN-ID-' + item.id) %> / 分類: <%= item.category %>"
+        >詳細を表示</button>
       </div>
     <% }) %>
   </div>
@@ -219,164 +243,263 @@
         <h5 class="modal-title" id="modalTitle"></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-body">
+        <div id="modalMeta" class="small text-muted mb-2"></div>
+        <div id="modalBody"></div>
+      </div>
     </div>
   </div>
 </div>
 
-<div id="toastContainer"></div>
+<div id="toastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100;"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let refreshTimer=null;
+let refreshTimer = null;
+let lastRefreshFailed = false;
 
-// ダークモード
-const htmlEl=document.documentElement;
-const themeToggleBtn=document.getElementById('themeToggle');
+const htmlEl = document.documentElement;
+const themeToggleBtn = document.getElementById('themeToggle');
 function setTheme(theme){
-  htmlEl.setAttribute('data-bs-theme',theme);
-  localStorage.setItem('theme',theme);
-  themeToggleBtn.innerHTML=theme==='dark'?'<i class="bi bi-sun-fill"></i>':'<i class="bi bi-moon-fill"></i>';
+  htmlEl.setAttribute('data-bs-theme', theme);
+  localStorage.setItem('theme', theme);
+  themeToggleBtn.innerHTML = theme === 'dark' ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-fill"></i>';
 }
-themeToggleBtn.addEventListener('click',()=>setTheme(htmlEl.getAttribute('data-bs-theme')==='dark'?'light':'dark'));
-setTheme(localStorage.getItem('theme')||'light');
+themeToggleBtn.addEventListener('click', () => setTheme(htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'));
+setTheme(localStorage.getItem('theme') || 'light');
 
-// トースト通知
-function showToast(message,type='success'){
-  const container=document.getElementById('toastContainer');
-  const toastEl=document.createElement('div');
-  toastEl.className=`toast align-items-center text-bg-${type} border-0`;
-  toastEl.role='alert';
-  toastEl.innerHTML=`
-    <div class="d-flex">
-      <div class="toast-body">${message}</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-    </div>`;
+function showToast(message, type='success', withRetry=false){
+  const container = document.getElementById('toastContainer');
+  const toastEl = document.createElement('div');
+  toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+  const retryHtml = withRetry ? '<button type="button" class="btn btn-sm btn-light ms-2 retry-refresh">再試行</button>' : '';
+  toastEl.innerHTML = `<div class="d-flex"><div class="toast-body">${message}${retryHtml}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
   container.appendChild(toastEl);
-  const toast=new bootstrap.Toast(toastEl,{delay:2500});
+  const toast = new bootstrap.Toast(toastEl, { delay: withRetry ? 6000 : 2500 });
   toast.show();
-  toastEl.addEventListener('hidden.bs.toast',()=>toastEl.remove());
+
+  const retryBtn = toastEl.querySelector('.retry-refresh');
+  if (retryBtn) retryBtn.addEventListener('click', () => fetchLatestData(true));
+
+  toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
+function selectedValues(id){
+  const el = document.getElementById(id);
+  if (!el) return [];
+  return Array.from(el.selectedOptions).map(o => o.value);
+}
 
-// フィルタ開閉
-const filterBox=document.getElementById('filterBox');
-const filterToggle=document.getElementById('filterToggle');
-filterToggle.addEventListener('click',()=>{
-  const open=filterBox.style.display==='block';
-  filterBox.style.display=open?'none':'block';
-  filterToggle.innerHTML=open?'<i class="bi bi-funnel"></i> フィルタを開く':'<i class="bi bi-x-circle"></i> フィルタを隠す';
-});
+function setSelectedValues(id, values){
+  const el = document.getElementById(id);
+  if (!el) return;
+  Array.from(el.options).forEach(opt => { opt.selected = values.includes(opt.value); });
+}
 
-// フィルタ適用 + 表示更新
+function syncDesktopAndMobile(source){
+  const pairs = {
+    statusFilter: 'statusFilterMobile',
+    categoryFilter: 'categoryFilterMobile',
+    tagFilter: 'tagFilterMobile',
+  };
+  Object.entries(pairs).forEach(([desktop, mobile]) => {
+    const from = source === 'mobile' ? mobile : desktop;
+    const to = source === 'mobile' ? desktop : mobile;
+    setSelectedValues(to, selectedValues(from));
+  });
+}
+
+function currentFilters(){
+  const useMobile = window.matchMedia('(max-width: 768px)').matches;
+  const statusId = useMobile ? 'statusFilterMobile' : 'statusFilter';
+  const categoryId = useMobile ? 'categoryFilterMobile' : 'categoryFilter';
+  const tagId = useMobile ? 'tagFilterMobile' : 'tagFilter';
+
+  return {
+    query: document.getElementById('searchInput').value.toLowerCase(),
+    statuses: selectedValues(statusId),
+    categories: selectedValues(categoryId),
+    tags: selectedValues(tagId),
+  };
+}
+
+function renderFilterChips(filters){
+  const active = document.getElementById('activeFilters');
+  if (!active) return;
+  active.innerHTML = '';
+
+  const chips = [];
+  if (filters.query) chips.push({ type: 'query', value: filters.query, label: `キーワード: ${filters.query}` });
+  filters.statuses.forEach(v => chips.push({ type: 'status', value: v, label: `ステータス: ${v}` }));
+  filters.categories.forEach(v => chips.push({ type: 'category', value: v, label: `分類: ${v}` }));
+  filters.tags.forEach(v => chips.push({ type: 'tag', value: v, label: `タグ: ${v}` }));
+
+  chips.forEach(chip => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-secondary rounded-pill filter-chip';
+    btn.dataset.type = chip.type;
+    btn.dataset.value = chip.value;
+    btn.innerHTML = `${chip.label} <i class="bi bi-x ms-1"></i>`;
+    active.appendChild(btn);
+  });
+
+  active.style.display = chips.length > 0 ? 'flex' : 'none';
+}
+
 function applyFilters(){
-  const q=document.getElementById('searchInput').value.toLowerCase();
-  const statuses=Array.from(document.getElementById('statusFilter').selectedOptions).map(o=>o.value);
-  const categories=Array.from(document.getElementById('categoryFilter').selectedOptions).map(o=>o.value);
-  const tags=Array.from(document.getElementById('tagFilter').selectedOptions).map(o=>o.value);
+  const filters = currentFilters();
 
-  document.querySelectorAll('.incident-card, .maint-card').forEach(card=>{
-    const text=(card.dataset.title+' '+card.dataset.category+' '+card.dataset.tags).toLowerCase();
-    const cardStatus=card.querySelector('.badge').innerText.trim();
-    const matchText=text.includes(q);
-    const matchStatus=statuses.length===0||statuses.includes(cardStatus);
-    const matchCategory=categories.length===0||categories.includes(card.dataset.category);
-    const matchTag=tags.length===0||tags.some(t=>card.dataset.tags.includes(t));
-    card.style.display=matchText&&matchStatus&&matchCategory&&matchTag?'':'none';
+  document.querySelectorAll('.incident-card, .maint-card').forEach(card => {
+    const text = `${card.dataset.title} ${card.dataset.category} ${card.dataset.tags}`.toLowerCase();
+    const cardStatus = card.dataset.status;
+
+    const matchText = text.includes(filters.query);
+    const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(cardStatus);
+    const matchCategory = filters.categories.length === 0 || filters.categories.includes(card.dataset.category);
+    const matchTag = filters.tags.length === 0 || filters.tags.some(t => card.dataset.tags.includes(t));
+
+    card.style.display = (matchText && matchStatus && matchCategory && matchTag) ? '' : 'none';
   });
 
-  const activeFilters=document.getElementById('activeFilters');
-  const parts=[];
-  if(q) parts.push(`キーワード: 「${q}」`);
-  if(statuses.length) parts.push(`ステータス: 「${statuses.join('」「')}」`);
-  if(categories.length) parts.push(`カテゴリ: 「${categories.join('」「')}」`);
-  if(tags.length) parts.push(`タグ: 「${tags.join('」「')}」`);
-
-  if(parts.length>0){
-    activeFilters.style.display='block';
-    activeFilters.innerHTML=`<i class="bi bi-funnel-fill me-1"></i><strong>現在のフィルタ:</strong> ${parts.join(' | ')}`;
-  }else{
-    activeFilters.style.display='none';
-    activeFilters.innerHTML='';
-  }
+  renderFilterChips(filters);
 }
-['searchInput','statusFilter','categoryFilter','tagFilter'].forEach(id=>{
-  document.getElementById(id).addEventListener('input',applyFilters);
-  document.getElementById(id).addEventListener('change',applyFilters);
+
+['searchInput','statusFilter','categoryFilter','tagFilter','statusFilterMobile','categoryFilterMobile','tagFilterMobile'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    if (id.includes('Mobile')) syncDesktopAndMobile('mobile');
+    else if (id !== 'searchInput') syncDesktopAndMobile('desktop');
+    applyFilters();
+  });
+  el.addEventListener('change', () => {
+    if (id.includes('Mobile')) syncDesktopAndMobile('mobile');
+    else if (id !== 'searchInput') syncDesktopAndMobile('desktop');
+    applyFilters();
+  });
 });
 
-// フィルタ解除ボタン
-document.getElementById('clearFilters').addEventListener('click',()=>{
-  document.getElementById('searchInput').value='';
-  ['statusFilter','categoryFilter','tagFilter'].forEach(id=>{
-    Array.from(document.getElementById(id).options).forEach(opt=>opt.selected=false);
+const activeFiltersEl = document.getElementById('activeFilters');
+if (activeFiltersEl) activeFiltersEl.addEventListener('click', (e) => {
+  const chip = e.target.closest('.filter-chip');
+  if (!chip) return;
+
+  if (chip.dataset.type === 'query') {
+    document.getElementById('searchInput').value = '';
+  }
+
+  const mapping = {
+    status: ['statusFilter', 'statusFilterMobile'],
+    category: ['categoryFilter', 'categoryFilterMobile'],
+    tag: ['tagFilter', 'tagFilterMobile'],
+  };
+
+  const targetIds = mapping[chip.dataset.type] || [];
+  targetIds.forEach(id => {
+    const values = selectedValues(id).filter(v => v !== chip.dataset.value);
+    setSelectedValues(id, values);
   });
+
   applyFilters();
 });
 
-// タブ切替
-document.querySelectorAll('[data-tab]').forEach(tab=>{
-  tab.addEventListener('click',e=>{
+document.getElementById('clearFilters').addEventListener('click', () => {
+  document.getElementById('searchInput').value = '';
+  ['statusFilter','categoryFilter','tagFilter','statusFilterMobile','categoryFilterMobile','tagFilterMobile'].forEach(id => setSelectedValues(id, []));
+  applyFilters();
+});
+
+const desktopFilterCollapse = document.getElementById('desktopFilterCollapse');
+const desktopFilterToggle = document.getElementById('desktopFilterToggle');
+function syncDesktopFilterToggleLabel() {
+  if (!desktopFilterCollapse || !desktopFilterToggle) return;
+  const isOpen = desktopFilterCollapse.classList.contains('show');
+  if (isOpen) {
+    desktopFilterToggle.innerHTML = '<i class="bi bi-x-circle me-1"></i>フィルタを隠す';
+    desktopFilterToggle.classList.remove('btn-outline-secondary');
+    desktopFilterToggle.classList.add('btn-secondary');
+  } else {
+    desktopFilterToggle.innerHTML = '<i class="bi bi-funnel me-1"></i>フィルタを開く';
+    desktopFilterToggle.classList.remove('btn-secondary');
+    desktopFilterToggle.classList.add('btn-outline-secondary');
+  }
+}
+
+if (desktopFilterCollapse && desktopFilterToggle) {
+  desktopFilterCollapse.addEventListener('shown.bs.collapse', syncDesktopFilterToggleLabel);
+  desktopFilterCollapse.addEventListener('hidden.bs.collapse', syncDesktopFilterToggleLabel);
+  desktopFilterToggle.addEventListener('click', () => setTimeout(syncDesktopFilterToggleLabel, 0));
+}
+
+document.querySelectorAll('[data-tab]').forEach(tab => {
+  tab.addEventListener('click', e => {
     e.preventDefault();
-    document.querySelectorAll('.nav-link').forEach(el=>el.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
   });
 });
 
-// モーダル詳細
-function showDetails(title,html){
-  document.getElementById('modalTitle').innerText=title;
-  document.getElementById('modalBody').innerHTML=html;
+function showDetails(title, html, meta){
+  document.getElementById('modalTitle').innerText = title;
+  document.getElementById('modalMeta').innerText = meta || '';
+  document.getElementById('modalBody').innerHTML = html;
   new bootstrap.Modal(document.getElementById('detailModal')).show();
 }
-// 🔁 自動更新
-function setAutoRefresh(){
-  const interval=parseInt(document.getElementById('refreshInterval').value);
-  if(refreshTimer)clearInterval(refreshTimer);
-  if(interval>0)refreshTimer=setInterval(fetchLatestData,interval);
-}
-document.getElementById('refreshInterval').addEventListener('change',setAutoRefresh);
-document.getElementById('manualRefresh').addEventListener('click',()=>fetchLatestData(true));
 
-async function fetchLatestData(manual=false){
-  try{
-    const currentFilters={
-      query:document.getElementById('searchInput').value,
-      statuses:Array.from(document.getElementById('statusFilter').selectedOptions).map(o=>o.value),
-      categories:Array.from(document.getElementById('categoryFilter').selectedOptions).map(o=>o.value),
-      tags:Array.from(document.getElementById('tagFilter').selectedOptions).map(o=>o.value)
-    };
-    const res=await fetch(window.location.href,{headers:{'X-Requested-With':'XMLHttpRequest'}});
-    const html=await res.text();
-    const doc=new DOMParser().parseFromString(html,'text/html');
-    document.getElementById('tab-incidents').innerHTML=doc.getElementById('tab-incidents').innerHTML;
-    document.getElementById('tab-maintenance').innerHTML=doc.getElementById('tab-maintenance').innerHTML;
-    document.getElementById('searchInput').value=currentFilters.query;
-    const reselect=(id,vals)=>Array.from(document.getElementById(id).options).forEach(opt=>opt.selected=vals.includes(opt.value));
-    reselect('statusFilter',currentFilters.statuses);
-    reselect('categoryFilter',currentFilters.categories);
-    reselect('tagFilter',currentFilters.tags);
-    applyFilters();
-    const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-    showToast(manual?`最新データを取得しました（${time}）`:`自動更新完了（${time}）`,'success');
-  }catch(e){
-    console.error(e);
-    showToast('データの更新に失敗しました','danger');
-  }
-}
-
-//URLハッシュ（#maintenance）でタブを自動選択
-window.addEventListener('DOMContentLoaded', () => {
-  const hash = window.location.hash;
-  if (hash === '#maintenance') {
-    const maintTab = document.querySelector('[data-tab="maintenance"]');
-    if (maintTab) maintTab.click();
-  }
+document.addEventListener('click', (e) => {
+  const button = e.target.closest('.detail-btn');
+  if (!button) return;
+  showDetails(button.dataset.title || '', button.dataset.html || '', button.dataset.meta || '');
 });
 
-setAutoRefresh();
+function setAutoRefresh(){
+  const interval = parseInt(document.getElementById('refreshInterval').value, 10);
+  if (refreshTimer) clearInterval(refreshTimer);
+  if (interval > 0) refreshTimer = setInterval(fetchLatestData, interval);
+}
+document.getElementById('refreshInterval').addEventListener('change', setAutoRefresh);
+document.getElementById('manualRefresh').addEventListener('click', () => fetchLatestData(true));
+
+async function fetchLatestData(manual = false){
+  try {
+    const filters = currentFilters();
+    const currentTab = document.querySelector('.nav-link.active')?.dataset.tab || 'incidents';
+
+    const res = await fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    document.getElementById('tab-incidents').innerHTML = doc.getElementById('tab-incidents').innerHTML;
+    document.getElementById('tab-maintenance').innerHTML = doc.getElementById('tab-maintenance').innerHTML;
+    document.getElementById('lastUpdated').innerText = doc.getElementById('lastUpdated').innerText;
+
+    document.getElementById('searchInput').value = filters.query;
+    ['statusFilter','statusFilterMobile'].forEach(id => setSelectedValues(id, filters.statuses));
+    ['categoryFilter','categoryFilterMobile'].forEach(id => setSelectedValues(id, filters.categories));
+    ['tagFilter','tagFilterMobile'].forEach(id => setSelectedValues(id, filters.tags));
+
+    document.querySelector(`[data-tab="${currentTab}"]`)?.click();
+    applyFilters();
+
+    lastRefreshFailed = false;
+    const t = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    showToast(manual ? `最新データを取得しました（${t}）` : `自動更新完了（${t}）`, 'success');
+  } catch (e) {
+    console.error(e);
+    lastRefreshFailed = true;
+    showToast('データ更新に失敗しました。', 'danger', true);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = window.location.hash;
+  if (hash === '#maintenance') document.querySelector('[data-tab="maintenance"]')?.click();
+  applyFilters();
+  setAutoRefresh();
+  syncDesktopFilterToggleLabel();
+});
 </script>
 </body>
 </html>

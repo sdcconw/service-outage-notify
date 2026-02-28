@@ -21,7 +21,7 @@
 - ログインは `ADMIN_USER` / `ADMIN_PASS` で判定する。
 - 認証成功時は JWT を Cookie に保存し、有効期限は1時間とする。
 - API は以下のいずれかで認証可能とする。
-- `x-api-key` ヘッダー（または `api_key` クエリ）
+- `x-api-key` ヘッダー
 - `Authorization: Bearer <JWT>` ヘッダー
 
 ### FR-02 障害情報管理（管理画面）

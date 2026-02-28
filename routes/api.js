@@ -1,8 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../models/db');
-const auth = require('../middleware/auth');
+const { requireApiAuth } = require('../middleware/auth');
 const { body, validationResult, param } = require('express-validator');
+const { writeAuditLog } = require('../models/audit');
+const { generateIncidentCode, generateMaintenanceCode } = require('../models/managementCode');
+const { resolveStatusColor } = require('../models/statusColor');
+
+const auth = requireApiAuth;
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 /** 共通レスポンス関数 */
 function respond(res, success, data = null, error = null, status = 200) {
@@ -15,11 +21,96 @@ function exists(table, id) {
   return !!row;
 }
 
-/** 一意コード生成（INC-YYYYMMDD-HHMM形式＋乱数） */
-function generateCode(prefix = 'INC') {
-  const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 12);
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `${prefix}-${timestamp}-${random}`;
+function parseTagIds(tags) {
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .map((tagId) => Number(tagId))
+    .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+}
+
+function allTagsExist(tagIds) {
+  if (tagIds.length === 0) return true;
+  const rows = db
+    .prepare(`SELECT id FROM tags WHERE id IN (${tagIds.map(() => '?').join(',')})`)
+    .all(...tagIds);
+  return rows.length === new Set(tagIds).size;
+}
+
+function saveIncidentTags(incidentId, tagIds) {
+  db.prepare('DELETE FROM incident_tags WHERE incident_id = ?').run(incidentId);
+  if (tagIds.length === 0) return;
+  const stmt = db.prepare('INSERT INTO incident_tags (incident_id, tag_id) VALUES (?, ?)');
+  tagIds.forEach((tagId) => stmt.run(incidentId, tagId));
+}
+
+function saveMaintenanceTags(maintenanceId, tagIds) {
+  db.prepare('DELETE FROM maintenance_tags WHERE maintenance_id = ?').run(maintenanceId);
+  if (tagIds.length === 0) return;
+  const stmt = db.prepare('INSERT INTO maintenance_tags (maintenance_id, tag_id) VALUES (?, ?)');
+  tagIds.forEach((tagId) => stmt.run(maintenanceId, tagId));
+}
+
+function shouldNotify(raw) {
+  return raw === true || raw === 1 || raw === '1';
+}
+
+function formatDateTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
+function getStatusColorInt(color) {
+  return parseInt(resolveStatusColor(color).hex.replace('#', ''), 16);
+}
+
+async function sendDiscordNotificationIncident(code, title, statusName, statusColor) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const embed = {
+    title: `⚠️ 案件管理番号 ${code} の障害情報`,
+    description: `件名: **${title}**\n現在のステータスは **${statusName}** です。\n詳細は [SDCCONWv3障害情報ページ](https://outage.s.sdconw.com/) をご確認ください。`,
+    color: getStatusColorInt(statusColor),
+    timestamp: new Date().toISOString(),
+  };
+  try {
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+  } catch (e) {
+    console.error('Discord通知エラー(incident):', e);
+  }
+}
+
+async function sendDiscordNotificationMaintenance(title, startTime, endTime, statusName, statusColor) {
+  if (!DISCORD_WEBHOOK_URL) return;
+  const embed = {
+    title: `🔧 「${title}」メンテナンス実施のお知らせ`,
+    description: [
+      `**メンテナンス予定時間:** ${formatDateTime(startTime)} ～ ${endTime ? formatDateTime(endTime) : '未定'}`,
+      `**対応状況:** ${statusName}`,
+      '',
+      '詳細は [SDCCONWv3メンテナンス情報ページ](https://outage.s.sdconw.com/#maintenance) をご確認ください。',
+    ].join('\n'),
+    color: getStatusColorInt(statusColor),
+    timestamp: new Date().toISOString(),
+  };
+  try {
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+  } catch (e) {
+    console.error('Discord通知エラー(maintenance):', e);
+  }
 }
 
 /**
@@ -60,25 +151,37 @@ function generateCode(prefix = 'INC') {
  *                     type: object
  *                     properties:
  *                       id: { type: integer, example: 1 }
- *                       code: { type: string, example: "INC-20251026-AB12CD" }
+ *                       code: { type: string, example: "INC202510261423001" }
  *                       title: { type: string, example: "通信障害" }
  *                       category: { type: string, example: "ネットワーク" }
  *                       status: { type: string, example: "対応中" }
  *                       start_at: { type: string, example: "2025-10-26T14:23:00+09:00" }
  *                       end_at: { type: string, example: null }
+ *                       tags:
+ *                         type: array
+ *                         items: { type: string }
+ *                         example: ["OSI01"]
  *                 error: { type: string, example: null }
  */
 router.get('/incidents', auth, (req, res) => {
   try {
     const rows = db.prepare(`
       SELECT i.id, i.code, i.title, i.info_md, i.start_at, i.end_at,
+             COALESCE(GROUP_CONCAT(t.name, '||'), '') AS tags_csv,
              c.name AS category, s.name AS status
       FROM incidents i
       JOIN categories c ON i.category_id = c.id
       JOIN statuses s ON i.status_id = s.id
+      LEFT JOIN incident_tags it ON it.incident_id = i.id
+      LEFT JOIN tags t ON t.id = it.tag_id
+      GROUP BY i.id
       ORDER BY i.created_at DESC
     `).all();
-    respond(res, true, rows);
+    const data = rows.map((row) => ({
+      ...row,
+      tags: row.tags_csv ? row.tags_csv.split('||').filter(Boolean) : [],
+    })).map(({ tags_csv, ...row }) => row);
+    respond(res, true, data);
   } catch (e) {
     respond(res, false, null, e.message, 500);
   }
@@ -100,7 +203,7 @@ router.get('/incidents', auth, (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [title, category_id, status_id]
+ *             required: [title, category_id, status_id, start_at]
  *             properties:
  *               title:
  *                 type: string
@@ -126,6 +229,13 @@ router.get('/incidents', auth, (req, res) => {
  *                 type: boolean
  *                 description: 非表示フラグ（true=非公開, false=公開）
  *                 example: false
+ *               tags:
+ *                 type: array
+ *                 items: { type: integer }
+ *                 description: タグID配列
+ *               discord_notify:
+ *                 type: boolean
+ *                 description: Discord通知を送信するか
  *           example:
  *             title: "API応答遅延"
  *             category_id: 2
@@ -152,22 +262,35 @@ router.post(
     body('category_id').isInt({ min: 1 }),
     body('status_id').isInt({ min: 1 }),
     body('info_md').optional().isString(),
-    body('start_at').optional().isISO8601(),
-    body('end_at').optional().isISO8601(),
+    body('start_at').isISO8601(),
+    body('end_at').optional({ values: 'null' }).isISO8601(),
     body('is_hidden').optional().isBoolean(),
+    body('tags').optional().isArray(),
+    body('tags.*').optional().isInt({ min: 1 }),
+    body('discord_notify').optional(),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return respond(res, false, null, errors.array(), 400);
-    const { title, category_id, status_id, info_md, start_at, end_at, is_hidden = false } = req.body;
+    const { title, category_id, status_id, info_md, start_at, end_at, is_hidden = false, discord_notify } = req.body;
+    const tagIds = parseTagIds(req.body.tags);
     if (!exists('categories', category_id)) return respond(res, false, null, 'カテゴリが存在しません', 400);
     if (!exists('statuses', status_id)) return respond(res, false, null, 'ステータスが存在しません', 400);
+    if (!allTagsExist(tagIds)) return respond(res, false, null, '存在しないタグIDが含まれています', 400);
     try {
       const stmt = db.prepare(`
         INSERT INTO incidents (code, title, category_id, status_id, info_md, start_at, end_at, is_hidden)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      const result = stmt.run(generateCode('INC'), title, category_id, status_id, info_md, start_at, end_at, is_hidden ? 1 : 0);
+      const result = stmt.run(generateIncidentCode(), title, category_id, status_id, info_md, start_at, end_at, is_hidden ? 1 : 0);
+      saveIncidentTags(result.lastInsertRowid, tagIds);
+      const after = db.prepare('SELECT * FROM incidents WHERE id = ?').get(result.lastInsertRowid);
+      writeAuditLog(req, 'create', 'incident', result.lastInsertRowid, null, after);
+      if (shouldNotify(discord_notify)) {
+        const incident = db.prepare('SELECT code, title FROM incidents WHERE id = ?').get(result.lastInsertRowid);
+        const status = db.prepare('SELECT name, color FROM statuses WHERE id = ?').get(status_id) || { name: '不明', color: '#6c757d' };
+        await sendDiscordNotificationIncident(incident.code, incident.title, status.name, status.color);
+      }
       respond(res, true, { id: result.lastInsertRowid }, null, 201);
     } catch (e) {
       respond(res, false, null, e.message, 500);
@@ -197,7 +320,7 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [title, category_id, status_id]
+ *             required: [title, category_id, status_id, start_at]
  *             properties:
  *               title:
  *                 type: string
@@ -227,6 +350,13 @@ router.post(
  *                 type: boolean
  *                 description: 非表示フラグ（true=非公開, false=公開）
  *                 example: false
+ *               tags:
+ *                 type: array
+ *                 items: { type: integer }
+ *                 description: タグID配列
+ *               discord_notify:
+ *                 type: boolean
+ *                 description: Discord通知を送信するか
  *     responses:
  *       200:
  *         description: 更新成功
@@ -246,27 +376,43 @@ router.put(
     body('category_id').isInt({ min: 1 }),
     body('status_id').isInt({ min: 1 }),
     body('info_md').optional().isString(),
-    body('start_at').optional().isISO8601(),
-    body('end_at').optional().isISO8601(),
+    body('start_at').isISO8601(),
+    body('end_at').optional({ values: 'null' }).isISO8601(),
     body('is_hidden').optional().isBoolean(),
+    body('tags').optional().isArray(),
+    body('tags.*').optional().isInt({ min: 1 }),
+    body('discord_notify').optional(),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return respond(res, false, null, errors.array(), 400);
 
-    const { title, category_id, status_id, info_md, start_at, end_at, is_hidden = false } = req.body;
+    const { title, category_id, status_id, info_md, start_at, end_at, is_hidden = false, discord_notify } = req.body;
     const { id } = req.params;
+    const tagIds = parseTagIds(req.body.tags);
 
     if (!exists('incidents', id)) {
       return respond(res, false, null, '指定IDの障害が存在しません', 404);
     }
+    if (!exists('categories', category_id)) return respond(res, false, null, 'カテゴリが存在しません', 400);
+    if (!exists('statuses', status_id)) return respond(res, false, null, 'ステータスが存在しません', 400);
+    if (!allTagsExist(tagIds)) return respond(res, false, null, '存在しないタグIDが含まれています', 400);
 
     try {
+      const before = db.prepare('SELECT * FROM incidents WHERE id = ?').get(id);
       db.prepare(`
         UPDATE incidents
         SET title = ?, category_id = ?, status_id = ?, info_md = ?, start_at = ?, end_at = ?, is_hidden = ?
         WHERE id = ?
       `).run(title, category_id, status_id, info_md, start_at, end_at, is_hidden ? 1 : 0, id);
+      saveIncidentTags(id, tagIds);
+      const after = db.prepare('SELECT * FROM incidents WHERE id = ?').get(id);
+      writeAuditLog(req, 'update', 'incident', id, before, after);
+      if (shouldNotify(discord_notify)) {
+        const incident = db.prepare('SELECT code, title FROM incidents WHERE id = ?').get(id);
+        const status = db.prepare('SELECT name, color FROM statuses WHERE id = ?').get(status_id) || { name: '不明', color: '#6c757d' };
+        await sendDiscordNotificationIncident(incident.code, incident.title, status.name, status.color);
+      }
 
       respond(res, true, { id });
     } catch (e) {
@@ -304,7 +450,10 @@ router.delete('/incidents/:id', auth, [param('id').isInt({ min: 1 })], (req, res
   const { id } = req.params;
   if (!exists('incidents', id)) return respond(res, false, null, '該当データがありません', 404);
   try {
+    const before = db.prepare('SELECT * FROM incidents WHERE id=?').get(id);
+    db.prepare(`DELETE FROM incident_tags WHERE incident_id=?`).run(id);
     db.prepare(`DELETE FROM incidents WHERE id=?`).run(id);
+    writeAuditLog(req, 'delete', 'incident', id, before, null);
     respond(res, true, { id });
   } catch (e) {
     respond(res, false, null, e.message, 500);
@@ -333,26 +482,35 @@ router.delete('/incidents/:id', auth, [param('id').isInt({ min: 1 })], (req, res
  *               success: true
  *               data:
  *                 - id: 1
+ *                   code: "MTN202511010100001"
  *                   title: "夜間メンテナンス"
- *                   service_name: "認証API"
  *                   description: "DBスキーマ更新とバックアップ"
  *                   start_time: "2025-11-01T01:00:00+09:00"
  *                   end_time: "2025-11-01T03:00:00+09:00"
  *                   category: "システム"
  *                   status: "予定"
+ *                   tags: ["OSI01"]
  *               error: null
  */
 router.get('/maintenance', auth, (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT m.id, m.title, m.service_name, m.description, m.start_time, m.end_time,
+      SELECT m.id, m.code, m.title, m.description, m.start_time, m.end_time,
+             COALESCE(GROUP_CONCAT(t.name, '||'), '') AS tags_csv,
              c.name AS category, s.name AS status
       FROM maintenance_schedules m
       JOIN categories c ON m.category_id = c.id
       JOIN statuses s ON m.status_id = s.id
+      LEFT JOIN maintenance_tags mt ON mt.maintenance_id = m.id
+      LEFT JOIN tags t ON t.id = mt.tag_id
+      GROUP BY m.id
       ORDER BY m.created_at DESC
     `).all();
-    respond(res, true, rows);
+    const data = rows.map((row) => ({
+      ...row,
+      tags: row.tags_csv ? row.tags_csv.split('||').filter(Boolean) : [],
+    })).map(({ tags_csv, ...row }) => row);
+    respond(res, true, data);
   } catch (e) {
     respond(res, false, null, e.message, 500);
   }
@@ -373,16 +531,12 @@ router.get('/maintenance', auth, (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [title, category_id, status_id]
+ *             required: [title, category_id, status_id, start_time]
  *             properties:
  *               title:
  *                 type: string
  *                 description: メンテナンスタイトル
  *                 example: "夜間メンテナンス"
- *               service_name:
- *                 type: string
- *                 description: 対象サービス名
- *                 example: "User API"
  *               description:
  *                 type: string
  *                 description: メンテナンス内容の詳細
@@ -409,9 +563,15 @@ router.get('/maintenance', auth, (req, res) => {
  *                 type: boolean
  *                 description: 非表示フラグ（true=非公開, false=公開）
  *                 example: false
+ *               tags:
+ *                 type: array
+ *                 items: { type: integer }
+ *                 description: タグID配列
+ *               discord_notify:
+ *                 type: boolean
+ *                 description: Discord通知を送信するか
  *           example:
  *             title: "夜間メンテナンス"
- *             service_name: "User API"
  *             description: "バックアップおよびマイグレーション実施"
  *             start_time: "2025-11-01T01:00:00+09:00"
  *             end_time: "2025-11-01T03:00:00+09:00"
@@ -436,12 +596,14 @@ router.post(
     body('category_id').isInt({ min: 1 }),
     body('status_id').isInt({ min: 1 }),
     body('description').optional().isString(),
-    body('service_name').optional().isString(),
-    body('start_time').optional().isISO8601(),
-    body('end_time').optional().isISO8601(),
+    body('start_time').isISO8601(),
+    body('end_time').optional({ values: 'null' }).isISO8601(),
     body('is_hidden').optional().isBoolean(),
+    body('tags').optional().isArray(),
+    body('tags.*').optional().isInt({ min: 1 }),
+    body('discord_notify').optional(),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return respond(res, false, null, errors.array(), 400);
 
@@ -450,33 +612,44 @@ router.post(
       category_id,
       status_id,
       description,
-      service_name,
       start_time,
       end_time,
       is_hidden = false,
+      discord_notify,
     } = req.body;
+    const tagIds = parseTagIds(req.body.tags);
 
     if (!exists('categories', category_id))
       return respond(res, false, null, 'カテゴリが存在しません', 400);
     if (!exists('statuses', status_id))
       return respond(res, false, null, 'ステータスが存在しません', 400);
+    if (!allTagsExist(tagIds))
+      return respond(res, false, null, '存在しないタグIDが含まれています', 400);
 
     try {
       const stmt = db.prepare(`
         INSERT INTO maintenance_schedules
-        (title, category_id, status_id, description, service_name, start_time, end_time, is_hidden)
+        (code, title, category_id, status_id, description, start_time, end_time, is_hidden)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const result = stmt.run(
+        generateMaintenanceCode(),
         title,
         category_id,
         status_id,
         description,
-        service_name,
         start_time,
         end_time,
         is_hidden ? 1 : 0
       );
+      saveMaintenanceTags(result.lastInsertRowid, tagIds);
+      const after = db.prepare('SELECT * FROM maintenance_schedules WHERE id = ?').get(result.lastInsertRowid);
+      writeAuditLog(req, 'create', 'maintenance', result.lastInsertRowid, null, after);
+      if (shouldNotify(discord_notify)) {
+        const maintenance = db.prepare('SELECT title, start_time, end_time FROM maintenance_schedules WHERE id = ?').get(result.lastInsertRowid);
+        const status = db.prepare('SELECT name, color FROM statuses WHERE id = ?').get(status_id) || { name: '予定', color: '#6c757d' };
+        await sendDiscordNotificationMaintenance(maintenance.title, maintenance.start_time, maintenance.end_time, status.name, status.color);
+      }
 
       respond(res, true, { id: result.lastInsertRowid }, null, 201);
     } catch (e) {
@@ -507,16 +680,12 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [title, category_id, status_id]
+ *             required: [title, category_id, status_id, start_time]
  *             properties:
  *               title:
  *                 type: string
  *                 description: メンテナンスタイトル
  *                 example: "夜間メンテナンス（再実施）"
- *               service_name:
- *                 type: string
- *                 description: 対象サービス名
- *                 example: "Auth API"
  *               description:
  *                 type: string
  *                 description: 詳細内容 (Markdown可)
@@ -543,9 +712,15 @@ router.post(
  *                 type: boolean
  *                 description: 非表示フラグ（true=非公開, false=公開）
  *                 example: false
+ *               tags:
+ *                 type: array
+ *                 items: { type: integer }
+ *                 description: タグID配列
+ *               discord_notify:
+ *                 type: boolean
+ *                 description: Discord通知を送信するか
  *           example:
  *             title: "夜間メンテナンス（再実施）"
- *             service_name: "Auth API"
  *             description: "DB負荷対策を追加"
  *             start_time: "2025-11-05T01:00:00+09:00"
  *             end_time: "2025-11-05T02:30:00+09:00"
@@ -571,27 +746,45 @@ router.put(
     body('category_id').isInt({ min: 1 }),
     body('status_id').isInt({ min: 1 }),
     body('description').optional().isString(),
-    body('service_name').optional().isString(),
-    body('start_time').optional().isISO8601(),
-    body('end_time').optional().isISO8601(),
+    body('start_time').isISO8601(),
+    body('end_time').optional({ values: 'null' }).isISO8601(),
     body('is_hidden').optional().isBoolean(),
+    body('tags').optional().isArray(),
+    body('tags.*').optional().isInt({ min: 1 }),
+    body('discord_notify').optional(),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return respond(res, false, null, errors.array(), 400);
 
     const { id } = req.params;
-    const { title, category_id, status_id, description, service_name, start_time, end_time, is_hidden = false } = req.body;
+    const { title, category_id, status_id, description, start_time, end_time, is_hidden = false, discord_notify } = req.body;
+    const tagIds = parseTagIds(req.body.tags);
 
     if (!exists('maintenance_schedules', id))
       return respond(res, false, null, '指定IDのメンテナンスが存在しません', 404);
+    if (!exists('categories', category_id))
+      return respond(res, false, null, 'カテゴリが存在しません', 400);
+    if (!exists('statuses', status_id))
+      return respond(res, false, null, 'ステータスが存在しません', 400);
+    if (!allTagsExist(tagIds))
+      return respond(res, false, null, '存在しないタグIDが含まれています', 400);
 
     try {
+      const before = db.prepare('SELECT * FROM maintenance_schedules WHERE id=?').get(id);
       db.prepare(`
         UPDATE maintenance_schedules
-        SET title=?, category_id=?, status_id=?, description=?, service_name=?, start_time=?, end_time=?, is_hidden=?
+        SET title=?, category_id=?, status_id=?, description=?, start_time=?, end_time=?, is_hidden=?
         WHERE id=?
-      `).run(title, category_id, status_id, description, service_name, start_time, end_time, is_hidden ? 1 : 0, id);
+      `).run(title, category_id, status_id, description, start_time, end_time, is_hidden ? 1 : 0, id);
+      saveMaintenanceTags(id, tagIds);
+      const after = db.prepare('SELECT * FROM maintenance_schedules WHERE id=?').get(id);
+      writeAuditLog(req, 'update', 'maintenance', id, before, after);
+      if (shouldNotify(discord_notify)) {
+        const maintenance = db.prepare('SELECT title, start_time, end_time FROM maintenance_schedules WHERE id = ?').get(id);
+        const status = db.prepare('SELECT name, color FROM statuses WHERE id = ?').get(status_id) || { name: '予定', color: '#6c757d' };
+        await sendDiscordNotificationMaintenance(maintenance.title, maintenance.start_time, maintenance.end_time, status.name, status.color);
+      }
 
       respond(res, true, { id });
     } catch (e) {
@@ -630,7 +823,10 @@ router.delete('/maintenance/:id', auth, [param('id').isInt({ min: 1 })], (req, r
   if (!exists('maintenance_schedules', id))
     return respond(res, false, null, '該当データがありません', 404);
   try {
+    const before = db.prepare('SELECT * FROM maintenance_schedules WHERE id=?').get(id);
+    db.prepare(`DELETE FROM maintenance_tags WHERE maintenance_id=?`).run(id);
     db.prepare(`DELETE FROM maintenance_schedules WHERE id=?`).run(id);
+    writeAuditLog(req, 'delete', 'maintenance', id, before, null);
     respond(res, true, { id });
   } catch (e) {
     respond(res, false, null, e.message, 500);
