@@ -16,6 +16,20 @@ const cookieSecure = process.env.COOKIE_SECURE
   : true;
 const cookieSameSite = process.env.COOKIE_SAMESITE || 'lax';
 
+function validateRequiredEnv() {
+  const requiredVars = ['ADMIN_USER', 'ADMIN_PASS', 'JWT_SECRET', 'API_KEY'];
+  const missing = requiredVars.filter((name) => {
+    const value = process.env[name];
+    return !value || String(value).trim() === '';
+  });
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}
+
+validateRequiredEnv();
+
 // view設定
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -36,6 +50,23 @@ const publicRateLimiter = createInMemoryRateLimiter({
   skip: (req) => !(req.method === 'GET' && req.path === '/'),
 });
 app.use(publicRateLimiter);
+
+const loginRateLimiter = createInMemoryRateLimiter({
+  enabled: process.env.LOGIN_RATE_LIMIT_ENABLED,
+  windowMs: process.env.LOGIN_RATE_LIMIT_WINDOW_MS,
+  maxRequests: process.env.LOGIN_RATE_LIMIT_MAX_REQUESTS,
+  message: process.env.LOGIN_RATE_LIMIT_MESSAGE || 'ログイン試行回数が上限に達しました。しばらくしてから再試行してください。',
+  skip: (req) => req.method !== 'POST',
+});
+app.use('/login', loginRateLimiter);
+
+const apiRateLimiter = createInMemoryRateLimiter({
+  enabled: process.env.API_RATE_LIMIT_ENABLED,
+  windowMs: process.env.API_RATE_LIMIT_WINDOW_MS,
+  maxRequests: process.env.API_RATE_LIMIT_MAX_REQUESTS,
+  message: process.env.API_RATE_LIMIT_MESSAGE || 'APIのリクエストが上限に達しました。しばらくしてから再試行してください。',
+});
+app.use('/api', apiRateLimiter);
 
 // ルーティング
 app.use('/', require('./routes/public'));

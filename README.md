@@ -10,13 +10,13 @@
 - カテゴリ・ステータス・タグのマスタ管理
 - 公開ページでの検索・複数条件フィルタ・タブ切替（障害/メンテ）
 - Markdown 本文の表示（公開画面側でサニタイズ）
-- 管理画面からの Discord Webhook 通知（任意）
+- 管理画面/API からの Discord Webhook 通知（任意）
 - JWT / APIキー認証付き REST API
 - Swagger UI による API ドキュメント表示
 
 ## 技術スタック
 
-- Node.js / Express
+- Node.js 24 / Express
 - EJS (テンプレート)
 - SQLite (`better-sqlite3`)
 - Swagger (`swagger-jsdoc`, `swagger-ui-express`)
@@ -30,6 +30,7 @@
 - `routes/settings.js`: マスタ管理画面
 - `routes/api.js`: REST API
 - `middleware/auth.js`: APIキー/JWT 認証
+- `middleware/rateLimit.js`: レートリミット
 - `views/*.ejs`: 画面テンプレート
 - `swagger.js`: Swagger 設定
 
@@ -50,10 +51,12 @@ ADMIN_USER=admin
 ADMIN_PASS=strong-password
 JWT_SECRET=your-jwt-secret
 API_KEY=your-api-key
+PUBLIC_BASE_URL=https://outage.example.com
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 PORT=3000
 ```
 
+- `PUBLIC_BASE_URL` は Discord 通知リンク生成に使用します。
 - `DISCORD_WEBHOOK_URL` は未設定でも動作します（通知のみ無効）。
 - `PORT` は未設定時 `3000` です。
 
@@ -64,6 +67,58 @@ npm start
 ```
 
 起動後、`http://localhost:3000` にアクセスしてください。
+
+## Docker 運用
+
+### 初回ビルド
+
+```bash
+docker build ./ -t soi01
+```
+
+### 起動
+
+```bash
+docker run -d \
+  --name soi01 \
+  --restart unless-stopped \
+  -p 3002:3000 \
+  -v $(pwd)/db:/app/db/ \
+  --env-file .env \
+  soi01
+```
+
+### 変更反映（再デプロイ）
+
+```bash
+docker stop soi01 && docker rm soi01 && docker build ./ -t soi01 --no-cache
+
+docker run -d \
+  --name soi01 \
+  --restart unless-stopped \
+  -p 3002:3000 \
+  -v $(pwd)/db:/app/db/ \
+  --env-file .env \
+  soi01
+```
+
+### 監査（脆弱性）
+
+```bash
+docker run --rm -it \
+  -v $(pwd):/app \
+  -w /app \
+  node:24 \
+  bash -lc "npm ci --omit=dev && npm audit --omit=dev"
+```
+
+## レートリミット
+
+- 公開トップ: `PUBLIC_RATE_LIMIT_*`
+- ログイン (`POST /login`): `LOGIN_RATE_LIMIT_*`
+- API (`/api/*`): `API_RATE_LIMIT_*`
+
+閾値はすべて `.env` で変更できます。
 
 ## 画面 URL
 
@@ -108,15 +163,8 @@ npm start
 ## 初期データと運用上の注意
 
 - SQLite DB は `./db/database.db` に作成されます。
-- `categories` / `statuses` / `tags` の初期データ投入処理はないため、管理画面の「設定管理」から先に登録してください。
-- 表示中のステータス色はマスタの `statuses.color` ではなく、コード内の固定マッピングで決定されます。
-
-## Docker
-
-```bash
-docker build -t service-outage-notify .
-docker run --rm -p 3000:3000 --env-file .env service-outage-notify
-```
+- `categories` / `statuses` / `tags` は管理画面の「設定管理」から登録してください。
+- ステータス色は `statuses.color` に保存した Bootstrap カラーキー（`primary` など）を参照します。
 
 ## ライセンス
 

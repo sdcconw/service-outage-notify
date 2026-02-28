@@ -15,6 +15,9 @@ router.use((req, res, next) => {
 });
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+const PUBLIC_INCIDENTS_URL = `${PUBLIC_BASE_URL}/`;
+const PUBLIC_MAINTENANCE_URL = `${PUBLIC_BASE_URL}/#maintenance`;
 
 function getStatusColorInt(color) {
   return parseInt(resolveStatusColor(color).hex.replace('#', ''), 16);
@@ -145,7 +148,7 @@ async function sendDiscordNotificationMaintenanceEmbed(title, startTime, endTime
       `**メンテナンス予定時間:** ${formatDateTime(startTime)} ～ ${endTime ? formatDateTime(endTime) : '未定'}`,
       `**対応状況:** ${statusName}`,
       '',
-      `詳細は [SDCCONWv3メンテナンス情報ページ](https://outage.s.sdconw.com/#maintenance) をご確認ください。`
+      `詳細は [メンテナンス情報ページ](${PUBLIC_MAINTENANCE_URL}) をご確認ください。`
     ].join('\n'),
     color: getStatusColorInt(statusColor),
     timestamp: new Date().toISOString(),
@@ -167,7 +170,7 @@ async function sendDiscordNotificationEmbed(code, title, statusName, statusColor
 
   const embed = {
     title: `⚠️ 案件管理番号 ${code} の障害情報`,
-    description: `件名: **${title}**\n現在のステータスは **${statusName}** です。\n詳細は [SDCCONWv3障害情報ページ](https://outage.s.sdconw.com/) をご確認ください。`,
+    description: `件名: **${title}**\n現在のステータスは **${statusName}** です。\n詳細は [障害情報ページ](${PUBLIC_INCIDENTS_URL}) をご確認ください。`,
     color: getStatusColorInt(statusColor),
     timestamp: new Date().toISOString(),
   };
