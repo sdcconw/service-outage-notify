@@ -120,6 +120,6 @@
 ## 6. 現実装ベースの補足事項
 
 - ステータス色は DB `statuses.color` ではなくアプリ内固定マッピングを使用している。
-- 障害管理と API で管理番号生成フォーマットが異なる。
-- マスタ削除時の参照チェックは主に incidents 系で、maintenance 側参照との完全整合は要検討。
+- 管理番号生成フォーマットは障害/メンテナンスともに管理画面と API で統一済み（障害: `INC-YYYYMMDDHHMMNNN`、メンテナンス: `MTN-YYYYMMDDHHMMNNN`）。
+- マスタ削除時の参照チェックは incidents 系に加えて maintenance 側参照（`maintenance_schedules` / `maintenance_tags`）も対象としている。
 - 初期マスタデータ投入機能はないため、初回起動後に管理画面から登録が必要。
