@@ -10,6 +10,7 @@ const { generateIncidentCode, generateMaintenanceCode } = require('../models/man
 const { resolveStatusColor } = require('../models/statusColor');
 
 const auth = requireApiAuth;
+const INTERNAL_ERROR_MESSAGE = '内部エラーが発生しました';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const PUBLIC_INCIDENTS_PATH = process.env.PUBLIC_INCIDENTS_PATH || '/';
@@ -197,7 +198,7 @@ router.get('/incidents', auth, (req, res) => {
     })).map(({ tags_csv, ...row }) => row);
     respond(res, true, data);
   } catch (e) {
-    respond(res, false, null, e.message, 500);
+    respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
   }
 });
 
@@ -307,7 +308,7 @@ router.post(
       }
       respond(res, true, { id: result.lastInsertRowid }, null, 201);
     } catch (e) {
-      respond(res, false, null, e.message, 500);
+      respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
     }
   }
 );
@@ -430,7 +431,7 @@ router.put(
 
       respond(res, true, { id });
     } catch (e) {
-      respond(res, false, null, e.message, 500);
+      respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
     }
   }
 );
@@ -470,7 +471,7 @@ router.delete('/incidents/:id', auth, [param('id').isInt({ min: 1 })], (req, res
     writeAuditLog(req, 'delete', 'incident', id, before, null);
     respond(res, true, { id });
   } catch (e) {
-    respond(res, false, null, e.message, 500);
+    respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
   }
 });
 
@@ -526,7 +527,7 @@ router.get('/maintenance', auth, (req, res) => {
     })).map(({ tags_csv, ...row }) => row);
     respond(res, true, data);
   } catch (e) {
-    respond(res, false, null, e.message, 500);
+    respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
   }
 });
 /**
@@ -667,7 +668,7 @@ router.post(
 
       respond(res, true, { id: result.lastInsertRowid }, null, 201);
     } catch (e) {
-      respond(res, false, null, e.message, 500);
+      respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
     }
   }
 );
@@ -802,7 +803,7 @@ router.put(
 
       respond(res, true, { id });
     } catch (e) {
-      respond(res, false, null, e.message, 500);
+      respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
     }
   }
 );
@@ -843,7 +844,7 @@ router.delete('/maintenance/:id', auth, [param('id').isInt({ min: 1 })], (req, r
     writeAuditLog(req, 'delete', 'maintenance', id, before, null);
     respond(res, true, { id });
   } catch (e) {
-    respond(res, false, null, e.message, 500);
+    respond(res, false, null, INTERNAL_ERROR_MESSAGE, 500);
   }
 });
 

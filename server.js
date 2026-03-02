@@ -6,11 +6,13 @@ dotenv.config();
 const express = require('express');
 const app = express();
 const path = require('path');
+const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const db = require('./models/db');
 const { ensureCsrfToken, verifyCsrfToken } = require('./middleware/csrf');
 const { createInMemoryRateLimiter } = require('./middleware/rateLimit');
+const { requireAdminAuth } = require('./middleware/auth');
 
 const trustProxy = Number(process.env.TRUST_PROXY || 1);
 const cookieSecure = process.env.COOKIE_SECURE
@@ -32,10 +34,23 @@ function validateRequiredEnv() {
 
 validateRequiredEnv();
 
+function timingSafeStringEquals(a, b) {
+  const hash = (v) => crypto.createHash('sha256').update(String(v || '')).digest();
+  return crypto.timingSafeEqual(hash(a), hash(b));
+}
+
 // view設定
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', trustProxy);
+
+// セキュリティヘッダー
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'SAMEORIGIN');
+  res.set('Referrer-Policy', 'same-origin');
+  next();
+});
 
 // ミドルウェア設定
 app.use(express.static(path.join(__dirname, 'public')));
@@ -81,8 +96,8 @@ app.get('/login', (req, res) => res.render('login'));
 app.post('/login', verifyCsrfToken, (req, res) => {
   const { username, password } = req.body;
   if (
-    username === process.env.ADMIN_USER &&
-    password === process.env.ADMIN_PASS
+    timingSafeStringEquals(username, process.env.ADMIN_USER) &&
+    timingSafeStringEquals(password, process.env.ADMIN_PASS)
   ) {
     const token = jwt.sign({ user: username }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.cookie('token', token, {
@@ -98,7 +113,7 @@ app.post('/login', verifyCsrfToken, (req, res) => {
 
 // Swagger UI
 const { swaggerUi, specs } = require('./swagger');
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+app.use('/api-docs', apiRateLimiter, requireAdminAuth, swaggerUi.serve, swaggerUi.setup(specs));
 
 // サーバ起動
 const PORT = process.env.PORT || 3000;
